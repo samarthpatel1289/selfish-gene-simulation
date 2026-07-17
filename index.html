@@ -449,7 +449,7 @@ const TERRITORY_RING_R = 5.8;
 const territories = [];
 
 for (let i = 0; i < NUM_TERRITORIES; i++) {
-  const angle = (i / NUM_TERRITORIES) * Math.PI * 2 - Math.PI / 2;
+  const angle = (i / NUM_TERRITORIES) * TWO_PI - Math.PI / 2;
   const tx = Math.cos(angle) * TERRITORY_RING_R;
   const tz = Math.sin(angle) * TERRITORY_RING_R;
 
@@ -500,7 +500,7 @@ class Agent {
     this.sprite = new THREE.Sprite(mat);
     this.sprite.scale.set(1.5, 1.5, 1);
 
-    const a = Math.random() * Math.PI * 2;
+    const a = Math.random() * TWO_PI;
     const r = Math.random() * 2.5;
     this.sprite.position.set(Math.cos(a) * r, 0.9, Math.sin(a) * r);
     this._target = this.sprite.position.clone();
@@ -519,7 +519,7 @@ class Agent {
   moveTo(x, z) { this._target.set(x, 0.9, z); }
 
   wander(radius = 4.5) {
-    const a = Math.random() * Math.PI * 2;
+    const a = Math.random() * TWO_PI;
     const r = Math.random() * radius + 0.5;
     this.moveTo(Math.cos(a) * r, Math.sin(a) * r);
   }
@@ -547,6 +547,13 @@ let simType  = 'hd';   // 'hd' (Hawk/Dove) or 'bi' (Bourgeois/Intruder)
 let round    = 0;
 let running  = false;
 let simSpeed = 2;
+
+// Game-balance constants — easy to tune in one place
+const MIN_ENERGY_THRESHOLD   = -4;  // energy below this kills an agent
+const MAX_AGE                = 9;   // rounds before old-age death is possible
+const OLD_AGE_DEATH_PROB     = 0.3; // probability of dying each round past MAX_AGE
+const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics jumps
+const TWO_PI                 = Math.PI * 2;
 
 // Phase cycle: fight → roam → mate → cull → (back to fight)
 const PHASES    = ['fight', 'roam', 'mate', 'cull'];
@@ -675,7 +682,7 @@ function runMatePhase() {
 
   // Move eligible agents to mate zone (center)
   eligible.forEach(a => {
-    const angle = Math.random() * Math.PI * 2;
+    const angle = Math.random() * TWO_PI;
     a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
   });
 
@@ -704,8 +711,8 @@ function runCullPhase() {
   const dead = [];
   agents.forEach(a => {
     a.age++;
-    const tooWeak = a.energy < -4;
-    const oldAge  = a.age > 9 && Math.random() < 0.3;
+    const tooWeak = a.energy < MIN_ENERGY_THRESHOLD;
+    const oldAge  = a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB;
     if (tooWeak || oldAge) dead.push(a);
   });
 
@@ -817,7 +824,7 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
-  const dt = Math.min(clock.getDelta(), 0.1); // cap delta to avoid jumps
+  const dt = Math.min(clock.getDelta(), MAX_DELTA_TIME); // cap delta to avoid jumps
 
   // Update all agent positions each frame
   agents.forEach(a => a.update(dt));
