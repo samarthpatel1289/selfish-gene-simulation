@@ -631,9 +631,13 @@ function _oppositeStrategyClass(StrategyClass) {
   return StrategyClass === classA ? classB : classA;
 }
 
+function _formatSliderValue(value, suffix = '') {
+  return value.toFixed(1) + suffix;
+}
+
 function _fitnessWeights(pool) {
   if (!pool.length) return [];
-  const minEnergy = Math.min(...pool.map(agent => agent.energy));
+  const minEnergy = pool.reduce((min, agent) => Math.min(min, agent.energy), Infinity);
   return pool.map(agent => agent.energy - minEnergy + FITNESS_EPSILON);
 }
 
@@ -644,7 +648,7 @@ function _weightedPick(items, weights) {
   let roll = Math.random() * totalWeight;
   for (let i = 0; i < items.length; i++) {
     roll -= weights[i];
-    if (roll <= 0) return { item: items[i], index: i };
+    if (roll < 0) return { item: items[i], index: i };
   }
   return { item: items[items.length - 1], index: items.length - 1 };
 }
@@ -956,14 +960,14 @@ document.getElementById('sl-speed').addEventListener('input', e => {
 ['win', 'draw', 'loss', 'injury'].forEach(k => {
   document.getElementById('sl-' + k).addEventListener('input', e => {
     payoff[k] = Number.parseFloat(e.target.value);
-    document.getElementById('val-' + k).textContent = payoff[k].toFixed(1);
+    document.getElementById('val-' + k).textContent = _formatSliderValue(payoff[k]);
   });
 });
 
 document.getElementById('sl-mutation').addEventListener('input', e => {
   const mutationPercent = Number.parseFloat(e.target.value);
   mutationRate = mutationPercent / 100;
-  document.getElementById('val-mutation').textContent = mutationPercent.toFixed(1) + '%';
+  document.getElementById('val-mutation').textContent = _formatSliderValue(mutationPercent, '%');
 });
 
 // Sim type tabs
