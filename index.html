@@ -725,13 +725,13 @@ function updateHdEss(sim) {
     box.className = "ess-box unstable";
     title.textContent = "⚔️ Pure Hawk ESS";
     desc.textContent =
-      "With these payoffs, Hawks always outperform Doves. The population converges to 100 % Hawks — " +
+      "With these payoffs, Hawks always outperform Doves. The population converges to 100% Hawks — " +
       "but everyone suffers because of constant costly fights.";
   } else if (p === 0) {
     box.className = "ess-box stable";
     title.textContent = "🕊️ Pure Dove ESS";
     desc.textContent =
-      "With these payoffs, Doves always outperform Hawks. The population converges to 100 % Doves — " +
+      "With these payoffs, Doves always outperform Hawks. The population converges to 100% Doves — " +
       "peaceful sharing dominates because fights are too costly.";
   } else {
     const pct = (p * 100).toFixed(1);
