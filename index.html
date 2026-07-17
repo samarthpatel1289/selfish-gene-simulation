@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🧬 Selfish Gene — 3D Simulation</title>
+
+  <!-- Chart.js (UMD, loaded before the ES-module script below) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Three.js + OrbitControls via importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    /* ─── Reset ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #1e1b4b 50%, #3b0764 100%);
+      padding: .85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .4rem;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 { font-size: clamp(.95rem, 3vw, 1.35rem); font-weight: 800; }
+    header .sub { font-size: .72rem; color: #94a3b8; }
+    #header-legend { font-size: .8rem; color: #cbd5e1; }
+
+    /* ─── Simulation type tabs ───────────────────────────────── */
+    .sim-tabs {
+      display: flex;
+      gap: .45rem;
+      padding: .55rem 1rem;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sim-tab {
+      padding: .32rem .85rem;
+      border-radius: 99px;
+      border: 1px solid #475569;
+      background: transparent;
+      color: #94a3b8;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .sim-tab.active { background: #0284c7; border-color: #0284c7; color: #fff; }
+    .sim-tab:not(.active):hover { background: #0f172a; color: #e2e8f0; }
+
+    /* ─── Main app layout ────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 310px;
+      height: calc(100dvh - 104px);
+      min-height: 440px;
+    }
+    @media (max-width: 680px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: min(62vw, 310px) 1fr;
+        height: auto;
+        min-height: unset;
+      }
+    }
+
+    /* ─── 3D canvas panel ────────────────────────────────────── */
+    .canvas-wrap { position: relative; overflow: hidden; background: #0d0d1a; }
+    #three-canvas { display: block; width: 100%; height: 100%; }
+
+    /* HUD overlays */
+    .hud {
+      position: absolute;
+      top: .6rem;
+      background: rgba(15,23,42,.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: .4rem;
+      padding: .28rem .6rem;
+      font-size: .72rem;
+      font-weight: 600;
+      pointer-events: none;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .hud-left  { left:  .6rem; }
+    .hud-right { right: .6rem; text-align: right; }
+
+    /* ─── Side panel ─────────────────────────────────────────── */
+    .side {
+      background: #1e293b;
+      border-left: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      gap: .8rem;
+      padding: .8rem;
+      overflow-y: auto;
+    }
+    @media (max-width: 680px) {
+      .side { border-left: none; border-top: 1px solid #334155; }
+    }
+
+    /* Section label */
+    .slbl {
+      font-size: .65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #475569;
+      padding-bottom: .3rem;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: .1rem;
+    }
+
+    /* Population count cards */
+    .pop-row { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+    .pop-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: .45rem;
+      padding: .5rem .6rem;
+      text-align: center;
+    }
+    .pop-card .num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+    .pop-card .lbl { font-size: .65rem; color: #64748b; margin-top: .08rem; }
+
+    /* Chart */
+    .chart-box { flex: 1; position: relative; min-height: 120px; }
+
+    /* Controls */
+    .ctrl { display: flex; flex-direction: column; gap: .45rem; }
+
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+    .btn {
+      padding: .46rem;
+      border-radius: .4rem;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn:hover { border-color: #38bdf8; background: #1e3a5f; }
+    .btn.primary { background: #0284c7; border-color: #0284c7; color: #fff; }
+    .btn.primary:hover { background: #0369a1; }
+
+    /* Sliders */
+    .sl-row {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .76rem;
+    }
+    .sl-row label { flex: 0 0 66px; color: #94a3b8; font-size: .73rem; }
+    .sl-row input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 4px;
+      background: #334155;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .sl-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+    }
+    .sl-row input[type=range]::-moz-range-thumb {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+    }
+    .sl-row .val {
+      min-width: 2.2rem;
+      text-align: right;
+      color: #38bdf8;
+      font-weight: 700;
+      font-size: .75rem;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════ HEADER ═══════════════════════════════════════ -->
+<header>
+  <div>
+    <h1>🧬 The Selfish Gene</h1>
+    <div class="sub">3D Game Theory Simulation · based on Richard Dawkins' book</div>
+  </div>
+  <div id="header-legend">🦅 Hawk &nbsp; 🕊️ Dove</div>
+</header>
+
+<!-- ═══════════ SIM TABS ═════════════════════════════════════ -->
+<div class="sim-tabs">
+  <button class="sim-tab active" data-sim="hd">🦅🕊️ Hawk vs Dove</button>
+  <button class="sim-tab"        data-sim="bi">🏠⚔️ Bourgeois vs Intruder</button>
+</div>
+
+<!-- ═══════════ APP ══════════════════════════════════════════ -->
+<div class="app">
+
+  <!-- LEFT: 3D canvas -->
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div class="hud hud-left"  id="hud-phase">🌅 Fight Phase</div>
+    <div class="hud hud-right" id="hud-round">Round 0</div>
+  </div>
+
+  <!-- RIGHT: side panel -->
+  <div class="side">
+
+    <!-- Live counts -->
+    <div>
+      <div class="slbl">Live Population</div>
+      <div class="pop-row">
+        <div class="pop-card">
+          <div class="num" id="cnt-a" style="color:#ef4444">—</div>
+          <div class="lbl" id="lbl-a">🦅 Hawks</div>
+        </div>
+        <div class="pop-card">
+          <div class="num" id="cnt-b" style="color:#38bdf8">—</div>
+          <div class="lbl" id="lbl-b">🕊️ Doves</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Population chart -->
+    <div>
+      <div class="slbl">Population Over Time</div>
+      <div class="chart-box"><canvas id="pop-chart"></canvas></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="ctrl">
+      <div class="slbl">Controls</div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-play">▶ Play</button>
+        <button class="btn"         id="btn-reset">↺ Reset</button>
+      </div>
+
+      <div class="sl-row">
+        <label>⚡ Speed</label>
+        <input type="range" id="sl-speed" min="1" max="6" step="1" value="2" />
+        <span class="val" id="val-speed">2×</span>
+      </div>
+
+      <div class="slbl" style="margin-top:.2rem">Starting Population</div>
+      <div class="sl-row">
+        <label id="lbl-sl-a">🦅 Hawks</label>
+        <input type="range" id="sl-init-a" min="2" max="14" step="1" value="8" />
+        <span class="val" id="val-init-a">8</span>
+      </div>
+      <div class="sl-row">
+        <label id="lbl-sl-b">🕊️ Doves</label>
+        <input type="range" id="sl-init-b" min="2" max="14" step="1" value="8" />
+        <span class="val" id="val-init-b">8</span>
+      </div>
+
+      <div class="slbl" style="margin-top:.2rem">Payoff Values</div>
+      <div class="sl-row">
+        <label>🏆 Win</label>
+        <input type="range" id="sl-win"    min="1" max="10" step="1" value="4" />
+        <span class="val"  id="val-win">4</span>
+      </div>
+      <div class="sl-row">
+        <label>🤝 Draw</label>
+        <input type="range" id="sl-draw"   min="0" max="8"  step="1" value="2" />
+        <span class="val"  id="val-draw">2</span>
+      </div>
+      <div class="sl-row">
+        <label>😔 Loss</label>
+        <input type="range" id="sl-loss"   min="-4" max="2" step="1" value="0" />
+        <span class="val"  id="val-loss">0</span>
+      </div>
+      <div class="sl-row">
+        <label>🤕 Injury</label>
+        <input type="range" id="sl-injury" min="-10" max="-1" step="1" value="-2" />
+        <span class="val"  id="val-injury">-2</span>
+      </div>
+    </div>
+
+  </div><!-- /side -->
+</div><!-- /app -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT  (ES module — can use import/from)
+     ═══════════════════════════════════════════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ═══════════════════════════════════════════════════════════════
+   STRATEGY CLASSES  (mirrors the Python structure in the repo)
+   ═══════════════════════════════════════════════════════════════ */
+
+class Payoff {
+  constructor(win = 4, loss = 0, draw = 2, injury = -2) {
+    this.win = win; this.loss = loss;
+    this.draw = draw; this.injury = injury;
+  }
+}
+
+class Hawk {
+  static emoji    = '🦅';
+  static label    = 'Hawks';
+  static cssColor = '#ef4444';
+  static hexColor = 0xef4444;
+  is_hawk = true; is_dove = false; is_bourgeois = false; is_intruder = false;
+  compete(other, payoff) {
+    if (other.is_dove) return payoff.win;
+    return (payoff.win + payoff.injury) / 2; // Hawk vs Hawk: risky fight
+  }
+}
+
+class Dove {
+  static emoji    = '🕊️';
+  static label    = 'Doves';
+  static cssColor = '#38bdf8';
+  static hexColor = 0x38bdf8;
+  is_hawk = false; is_dove = true; is_bourgeois = false; is_intruder = false;
+  compete(other, payoff) {
+    if (other.is_hawk) return payoff.loss;  // retreats from Hawk
+    return payoff.draw;                     // shares with Dove
+  }
+}
+
+class Bourgeois {
+  static emoji    = '🏠';
+  static label    = 'Bourgeois';
+  static cssColor = '#22c55e';
+  static hexColor = 0x22c55e;
+  is_hawk = false; is_dove = false; is_bourgeois = true; is_intruder = false;
+  compete(other, payoff, isAtHome = true) {
+    return isAtHome ? payoff.win : payoff.loss; // owner wins, visitor retreats
+  }
+}
+
+class Intruder {
+  static emoji    = '⚔️';
+  static label    = 'Intruders';
+  static cssColor = '#f97316';
+  static hexColor = 0xf97316;
+  is_hawk = false; is_dove = false; is_bourgeois = false; is_intruder = true;
+  compete(other, payoff) {
+    if (other.is_bourgeois) return payoff.loss; // Bourgeois home-defender wins
+    return (payoff.win + payoff.injury) / 2;    // Intruder vs Intruder: costly fight
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THREE.JS SCENE SETUP
+   ═══════════════════════════════════════════════════════════════ */
+
+const wrap     = document.getElementById('canvas-wrap');
+const canvas3d = document.getElementById('three-canvas');
+
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+camera.position.set(0, 16, 11);
+camera.lookAt(0, 0, 0);
+
+const orbitCtrl = new OrbitControls(camera, renderer.domElement);
+orbitCtrl.enableDamping = true;
+orbitCtrl.dampingFactor = 0.06;
+orbitCtrl.minDistance   = 6;
+orbitCtrl.maxDistance   = 35;
+orbitCtrl.maxPolarAngle = Math.PI / 2.05;
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.3);
+sun.position.set(8, 14, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(512, 512);
+scene.add(sun);
+
+// Ground plane
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(20, 20),
+  new THREE.MeshLambertMaterial({ color: 0x2d5a27 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Ground grid — gives depth cues
+const grid = new THREE.GridHelper(20, 20, 0x1a4a22, 0x1a4a22);
+grid.position.y = 0.02;
+scene.add(grid);
+
+// Mate zone — glowing green circle in the center
+const mateZoneMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(2.0, 32),
+  new THREE.MeshLambertMaterial({ color: 0x14532d, transparent: true, opacity: 0.85 })
+);
+mateZoneMesh.rotation.x = -Math.PI / 2;
+mateZoneMesh.position.y = 0.03;
+scene.add(mateZoneMesh);
+
+// Mate zone border ring
+const mateRing = new THREE.Mesh(
+  new THREE.RingGeometry(2.0, 2.2, 32),
+  new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+);
+mateRing.rotation.x = -Math.PI / 2;
+mateRing.position.y = 0.04;
+scene.add(mateRing);
+
+// Territories — arranged in a ring (fewer than max agents → always contested)
+const NUM_TERRITORIES = 5;
+const TERRITORY_RING_R = 5.8;
+const territories = [];
+
+for (let i = 0; i < NUM_TERRITORIES; i++) {
+  const angle = (i / NUM_TERRITORIES) * TWO_PI - Math.PI / 2;
+  const tx = Math.cos(angle) * TERRITORY_RING_R;
+  const tz = Math.sin(angle) * TERRITORY_RING_R;
+
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.65, 0.65, 0.08, 16),
+    new THREE.MeshLambertMaterial({ color: 0x78350f })
+  );
+  disc.position.set(tx, 0.04, tz);
+  scene.add(disc);
+
+  territories.push({ disc, x: tx, z: tz, ownerIdx: -1 });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EMOJI SPRITE FACTORY
+   ═══════════════════════════════════════════════════════════════ */
+
+const _texCache = {};
+function emojiTexture(emoji) {
+  if (_texCache[emoji]) return _texCache[emoji];
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = '96px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 64, 68);
+  const t = new THREE.CanvasTexture(c);
+  _texCache[emoji] = t;
+  return t;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AGENT CLASS  — one living creature in the 3D world
+   ═══════════════════════════════════════════════════════════════ */
+
+class Agent {
+  constructor(StrategyClass) {
+    this.Class    = StrategyClass;
+    this.strategy = new StrategyClass();
+    this.energy   = 2;      // resource energy accumulated
+    this.age      = 0;      // rounds survived
+    this.alive    = true;
+    this.homeIdx  = -1;     // territory index (Bourgeois only)
+
+    // 3D sprite
+    const mat  = new THREE.SpriteMaterial({ map: emojiTexture(StrategyClass.emoji), transparent: true });
+    this.sprite = new THREE.Sprite(mat);
+    this.sprite.scale.set(1.5, 1.5, 1);
+
+    const a = Math.random() * TWO_PI;
+    const r = Math.random() * 2.5;
+    this.sprite.position.set(Math.cos(a) * r, 0.9, Math.sin(a) * r);
+    this._target = this.sprite.position.clone();
+
+    scene.add(this.sprite);
+  }
+
+  /* Smooth movement — call every frame */
+  update(dt) {
+    const p = this.sprite.position;
+    const lerpSpeed = 3.5 * dt;
+    p.x += (this._target.x - p.x) * lerpSpeed;
+    p.z += (this._target.z - p.z) * lerpSpeed;
+  }
+
+  moveTo(x, z) { this._target.set(x, 0.9, z); }
+
+  wander(radius = 4.5) {
+    const a = Math.random() * TWO_PI;
+    const r = Math.random() * radius + 0.5;
+    this.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+
+  /* Scale pulse — visual feedback for fight outcome */
+  pulse(upScale = 1.8, ms = 300) {
+    this.sprite.scale.set(upScale, upScale, 1);
+    setTimeout(() => { if (this.alive) this.sprite.scale.set(1.5, 1.5, 1); }, ms);
+  }
+
+  dispose() {
+    scene.remove(this.sprite);
+    this.sprite.material.dispose();
+    this.alive = false;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIMULATION STATE
+   ═══════════════════════════════════════════════════════════════ */
+
+let payoff   = new Payoff();
+let agents   = [];
+let simType  = 'hd';   // 'hd' (Hawk/Dove) or 'bi' (Bourgeois/Intruder)
+let round    = 0;
+let running  = false;
+let simSpeed = 2;
+
+// Game-balance constants — easy to tune in one place
+const MIN_ENERGY_THRESHOLD   = -4;  // energy below this kills an agent
+const MAX_AGE                = 9;   // rounds before old-age death is possible
+const OLD_AGE_DEATH_PROB     = 0.3; // probability of dying each round past MAX_AGE
+const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics jumps
+const TWO_PI                 = Math.PI * 2;
+
+// Phase cycle: fight → roam → mate → cull → (back to fight)
+const PHASES    = ['fight', 'roam', 'mate', 'cull'];
+const PHASE_DUR = { fight: 2.2, roam: 0.9, mate: 2.0, cull: 0.6 };
+const PHASE_HUD = {
+  fight: '🌅 Fight Phase — territories are contested',
+  roam:  '☀️  Roaming',
+  mate:  '🌇 Mate Phase — offspring are born',
+  cull:  '🌙 Night — weak agents die',
+};
+const PHASE_SKY = {
+  fight: new THREE.Color(0x5c2020),
+  roam:  new THREE.Color(0x0f2a4a),
+  mate:  new THREE.Color(0x2b1147),
+  cull:  new THREE.Color(0x060611),
+};
+
+let phase      = 'fight';
+let phaseTimer = 0;
+
+// History for chart (last 60 rounds)
+const HIST_LEN = 60;
+const histA = [], histB = [];
+
+/* ─── init / reset ──────────────────────────────────────────── */
+
+function initAgents(countA, countB) {
+  agents.forEach(a => a.dispose());
+  agents = [];
+
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+
+  for (let i = 0; i < countA; i++) agents.push(new Agent(ClassA));
+  for (let i = 0; i < countB; i++) agents.push(new Agent(ClassB));
+
+  round = 0; phase = 'fight'; phaseTimer = 0;
+  histA.length = 0; histB.length = 0;
+
+  territories.forEach(t => {
+    t.ownerIdx = -1;
+    t.disc.material.color.setHex(0x78350f);
+  });
+
+  if (simType === 'bi') _assignBourgeoisHomes();
+  _refreshUI();
+  _refreshChart();
+}
+
+function _assignBourgeoisHomes() {
+  const bAgents = agents.filter(a => a.strategy.is_bourgeois);
+  territories.forEach((t, i) => {
+    if (i < bAgents.length) {
+      bAgents[i].homeIdx = i;
+      t.ownerIdx = i;
+      t.disc.material.color.setHex(0x15803d); // green = owned
+    }
+  });
+}
+
+/* ─── Fight Phase ───────────────────────────────────────────── */
+
+function runFightPhase() {
+  // Reset territory colours
+  territories.forEach(t => t.disc.material.color.setHex(0x78350f));
+
+  // Shuffle agents
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+
+  // Assign each agent to a territory (more agents than territories → contests)
+  const tBuckets = territories.map(() => []);
+  shuffled.forEach((agent, i) => {
+    const tIdx = i % territories.length;
+    tBuckets[tIdx].push(agent);
+    const t = territories[tIdx];
+    const jx = (Math.random() - 0.5) * 0.7;
+    const jz = (Math.random() - 0.5) * 0.7;
+    agent.moveTo(t.x + jx, t.z + jz);
+  });
+
+  // Resolve each territory
+  tBuckets.forEach((bucket, tIdx) => {
+    if (bucket.length === 0) return;
+
+    if (bucket.length === 1) {
+      // Uncontested — sole agent earns the resource
+      bucket[0].energy += payoff.win;
+      territories[tIdx].disc.material.color.setHex(0xfbbf24); // gold
+      bucket[0].pulse(2.0);
+    } else {
+      territories[tIdx].disc.material.color.setHex(0xef4444); // red = contested
+      // Pair up agents and fight
+      for (let k = 0; k + 1 < bucket.length; k += 2) {
+        const a = bucket[k], b = bucket[k + 1];
+        let gainA, gainB;
+
+        if (simType === 'bi') {
+          const aHome = a.homeIdx === tIdx;
+          const bHome = b.homeIdx === tIdx;
+          gainA = a.strategy.compete(b.strategy, payoff, aHome);
+          gainB = b.strategy.compete(a.strategy, payoff, bHome);
+        } else {
+          gainA = a.strategy.compete(b.strategy, payoff);
+          gainB = b.strategy.compete(a.strategy, payoff);
+        }
+
+        a.energy += gainA;
+        b.energy += gainB;
+        // Visual pulse: winner grows, loser shrinks briefly
+        if (gainA > gainB) { a.pulse(2.2); b.pulse(0.7, 250); }
+        else if (gainB > gainA) { b.pulse(2.2); a.pulse(0.7, 250); }
+        else { a.pulse(1.6); b.pulse(1.6); }
+      }
+      // Odd agent out at contested territory gets nothing
+    }
+  });
+}
+
+/* ─── Mate Phase ────────────────────────────────────────────── */
+
+const MATE_THRESHOLD = 3;
+const MAX_POPULATION = 28;
+
+function runMatePhase() {
+  const eligible = agents.filter(a => a.energy >= MATE_THRESHOLD);
+
+  // Move eligible agents to mate zone (center)
+  eligible.forEach(a => {
+    const angle = Math.random() * TWO_PI;
+    a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
+  });
+
+  // Produce one offspring per two eligible parents
+  const newborns = [];
+  for (let i = 0; i + 1 < eligible.length; i += 2) {
+    if (agents.length + newborns.length >= MAX_POPULATION) break;
+    const parent = eligible[i];
+    const child  = new Agent(parent.Class);
+    child.energy = 1;
+    // Spawn near parent
+    child.sprite.position.copy(parent.sprite.position);
+    child._target.copy(parent.sprite.position);
+    child.pulse(2.5, 400);
+    newborns.push(child);
+  }
+  agents.push(...newborns);
+
+  // Send everyone else to wander
+  agents.filter(a => !eligible.includes(a)).forEach(a => a.wander());
+}
+
+/* ─── Cull Phase ────────────────────────────────────────────── */
+
+function runCullPhase() {
+  const dead = [];
+  agents.forEach(a => {
+    a.age++;
+    const tooWeak = a.energy < MIN_ENERGY_THRESHOLD;
+    const oldAge  = a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB;
+    if (tooWeak || oldAge) dead.push(a);
+  });
+
+  // If over population cap, remove the weakest excess agents
+  if (agents.length - dead.length > MAX_POPULATION) {
+    const alive = agents.filter(a => !dead.includes(a));
+    alive.sort((a, b) => a.energy - b.energy);
+    const excess = alive.length - MAX_POPULATION;
+    for (let i = 0; i < excess; i++) dead.push(alive[i]);
+  }
+
+  dead.forEach(a => { a.dispose(); agents = agents.filter(x => x !== a); });
+
+  // After culling, scatter everyone
+  agents.forEach(a => a.wander(5));
+}
+
+/* ─── Advance one phase ─────────────────────────────────────── */
+
+function advancePhase() {
+  if      (phase === 'fight') { runFightPhase(); phase = 'roam'; agents.forEach(a => a.wander()); }
+  else if (phase === 'roam')  { phase = 'mate';  runMatePhase(); }
+  else if (phase === 'mate')  { phase = 'cull'; }
+  else {
+    runCullPhase();
+    round++;
+    _recordHistory();
+    _refreshChart();
+    phase = 'fight';
+  }
+
+  phaseTimer = 0;
+  _refreshUI();
+  scene.background.set(PHASE_SKY[phase]);
+}
+
+/* ─── History & chart ───────────────────────────────────────── */
+
+function _recordHistory() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  histA.push(agents.filter(a => a.strategy instanceof ClassA).length);
+  histB.push(agents.filter(a => a.strategy instanceof ClassB).length);
+  if (histA.length > HIST_LEN) { histA.shift(); histB.shift(); }
+}
+
+const popChart = new Chart(document.getElementById('pop-chart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: '🦅 Hawks',   data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.12)',
+        borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
+      { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
+        borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 10 } } },
+    scales: {
+      x: { display: false },
+      y: { beginAtZero: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
+    }
+  }
+});
+
+function _refreshChart() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  popChart.data.datasets[0].label = ClassA.emoji + ' ' + ClassA.label;
+  popChart.data.datasets[1].label = ClassB.emoji + ' ' + ClassB.label;
+  popChart.data.datasets[0].borderColor = ClassA.cssColor;
+  popChart.data.datasets[1].borderColor = ClassB.cssColor;
+  popChart.data.datasets[0].backgroundColor = ClassA.cssColor + '20';
+  popChart.data.datasets[1].backgroundColor = ClassB.cssColor + '20';
+  popChart.data.labels   = histA.map((_, i) => i + 1);
+  popChart.data.datasets[0].data = [...histA];
+  popChart.data.datasets[1].data = [...histB];
+  popChart.update('none');
+}
+
+/* ─── UI refresh ────────────────────────────────────────────── */
+
+function _refreshUI() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  const cntA   = agents.filter(a => a.strategy instanceof ClassA).length;
+  const cntB   = agents.filter(a => a.strategy instanceof ClassB).length;
+
+  document.getElementById('cnt-a').textContent = cntA;
+  document.getElementById('cnt-b').textContent = cntB;
+  document.getElementById('lbl-a').textContent = ClassA.emoji + ' ' + ClassA.label;
+  document.getElementById('lbl-b').textContent = ClassB.emoji + ' ' + ClassB.label;
+  document.getElementById('cnt-a').style.color = ClassA.cssColor;
+  document.getElementById('cnt-b').style.color = ClassB.cssColor;
+  document.getElementById('hud-phase').textContent = PHASE_HUD[phase];
+  document.getElementById('hud-round').textContent = 'Round ' + round;
+  document.getElementById('header-legend').textContent =
+    ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATION LOOP
+   ═══════════════════════════════════════════════════════════════ */
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), MAX_DELTA_TIME); // cap delta to avoid jumps
+
+  // Update all agent positions each frame
+  agents.forEach(a => a.update(dt));
+
+  // Advance simulation when running
+  if (running) {
+    phaseTimer += dt * simSpeed;
+    if (phaseTimer >= PHASE_DUR[phase]) advancePhase();
+
+    // Smoothly lerp sky colour toward target
+    scene.background.lerp(PHASE_SKY[phase], dt * 1.5);
+  }
+
+  orbitCtrl.update();
+
+  // Resize renderer to match container (handles window resize & mobile)
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (renderer.domElement.width  !== Math.round(w * renderer.getPixelRatio()) ||
+      renderer.domElement.height !== Math.round(h * renderer.getPixelRatio())) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+/* ═══════════════════════════════════════════════════════════════
+   UI EVENT LISTENERS
+   ═══════════════════════════════════════════════════════════════ */
+
+// Play / Pause
+const btnPlay = document.getElementById('btn-play');
+btnPlay.addEventListener('click', () => {
+  running = !running;
+  btnPlay.textContent = running ? '⏸ Pause' : '▶ Play';
+  btnPlay.className   = running ? 'btn' : 'btn primary';
+  if (running) clock.getDelta(); // flush accumulated delta
+});
+
+// Reset
+document.getElementById('btn-reset').addEventListener('click', () => {
+  running = false;
+  btnPlay.textContent = '▶ Play';
+  btnPlay.className   = 'btn primary';
+  initAgents(
+    +document.getElementById('sl-init-a').value,
+    +document.getElementById('sl-init-b').value
+  );
+  scene.background.set(PHASE_SKY.fight);
+});
+
+// Speed slider
+document.getElementById('sl-speed').addEventListener('input', e => {
+  simSpeed = +e.target.value;
+  document.getElementById('val-speed').textContent = simSpeed + '×';
+});
+
+// Population sliders (just update label, reset applies the value)
+['a', 'b'].forEach(s => {
+  document.getElementById('sl-init-' + s).addEventListener('input', e => {
+    document.getElementById('val-init-' + s).textContent = e.target.value;
+  });
+});
+
+// Payoff sliders — take effect immediately
+['win', 'draw', 'loss', 'injury'].forEach(k => {
+  document.getElementById('sl-' + k).addEventListener('input', e => {
+    payoff[k] = +e.target.value;
+    document.getElementById('val-' + k).textContent = e.target.value;
+  });
+});
+
+// Sim type tabs
+document.querySelectorAll('.sim-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sim-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    simType = tab.dataset.sim;
+    running = false;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.className   = 'btn primary';
+
+    const isHD = simType === 'hd';
+    document.getElementById('lbl-sl-a').textContent = isHD ? '🦅 Hawks'     : '🏠 Bourgeois';
+    document.getElementById('lbl-sl-b').textContent = isHD ? '🕊️ Doves'    : '⚔️ Intruders';
+
+    initAgents(
+      +document.getElementById('sl-init-a').value,
+      +document.getElementById('sl-init-b').value
+    );
+    scene.background.set(PHASE_SKY.fight);
+  });
+});
+
+// ── Initial boot ──────────────────────────────────────────────
+initAgents(8, 8);
+scene.background.set(PHASE_SKY.fight);
+</script>
+</body>
+</html>
