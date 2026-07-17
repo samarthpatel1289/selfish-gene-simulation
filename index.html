@@ -631,13 +631,13 @@ function _oppositeStrategyClass(StrategyClass) {
   return StrategyClass === classA ? classB : classA;
 }
 
-function _formatSliderValue(value, suffix = '') {
+function _formatDecimalValue(value, suffix = '') {
   return value.toFixed(1) + suffix;
 }
 
 function _fitnessWeights(pool) {
   if (!pool.length) return [];
-  const minEnergy = pool.reduce((min, agent) => Math.min(min, agent.energy), Infinity);
+  const minEnergy = pool.slice(1).reduce((min, agent) => Math.min(min, agent.energy), pool[0].energy);
   return pool.map(agent => agent.energy - minEnergy + FITNESS_EPSILON);
 }
 
@@ -648,8 +648,9 @@ function _weightedPick(items, weights) {
   let roll = Math.random() * totalWeight;
   for (let i = 0; i < items.length; i++) {
     roll -= weights[i];
-    if (roll < 0) return { item: items[i], index: i };
+    if (roll <= 0) return { item: items[i], index: i };
   }
+  // Floating-point precision can leave a tiny positive remainder, so fall back to the final item.
   return { item: items[items.length - 1], index: items.length - 1 };
 }
 
@@ -731,6 +732,14 @@ function runFightPhase() {
 
 const MAX_POPULATION = 28;
 
+function _calculateTargetSurvivors(selectableCount) {
+  // Keep at least one survivor, preserve most of the population, and never exceed the population cap.
+  return Math.min(
+    MAX_POPULATION,
+    Math.max(1, Math.ceil(selectableCount * NIGHT_SURVIVAL_RATE))
+  );
+}
+
 function runMatePhase() {
   const openSlots = MAX_POPULATION - agents.length;
   const birthCount = Math.min(openSlots, Math.floor(agents.length / 2));
@@ -776,10 +785,7 @@ function runCullPhase() {
 
   const oldAgeDead = agents.filter(a => a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB);
   const selectable = agents.filter(a => !oldAgeDead.includes(a));
-  const targetSurvivors = Math.min(
-    MAX_POPULATION,
-    Math.max(1, Math.ceil(selectable.length * NIGHT_SURVIVAL_RATE))
-  );
+  const targetSurvivors = _calculateTargetSurvivors(selectable.length);
   const survivorWeights = _fitnessWeights(selectable);
   const survivors = selectable.length > targetSurvivors
     ? _weightedSampleWithoutReplacement(selectable, targetSurvivors, survivorWeights)
@@ -788,7 +794,8 @@ function runCullPhase() {
   const dead = agents.filter(a => !survivorSet.has(a));
 
   dead.forEach(a => { a.dispose(); });
-  agents = survivors;
+  agents.length = 0;
+  agents.push(...survivors);
 
   // After culling, scatter everyone
   agents.forEach(a => a.wander(5));
@@ -960,14 +967,14 @@ document.getElementById('sl-speed').addEventListener('input', e => {
 ['win', 'draw', 'loss', 'injury'].forEach(k => {
   document.getElementById('sl-' + k).addEventListener('input', e => {
     payoff[k] = Number.parseFloat(e.target.value);
-    document.getElementById('val-' + k).textContent = _formatSliderValue(payoff[k]);
+    document.getElementById('val-' + k).textContent = _formatDecimalValue(payoff[k]);
   });
 });
 
 document.getElementById('sl-mutation').addEventListener('input', e => {
   const mutationPercent = Number.parseFloat(e.target.value);
   mutationRate = mutationPercent / 100;
-  document.getElementById('val-mutation').textContent = _formatSliderValue(mutationPercent, '%');
+  document.getElementById('val-mutation').textContent = _formatDecimalValue(mutationPercent, '%');
 });
 
 // Sim type tabs
