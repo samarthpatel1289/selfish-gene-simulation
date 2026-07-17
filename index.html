@@ -561,6 +561,7 @@ const OLD_AGE_DEATH_PROB     = 0.3; // probability of dying each round past MAX_
 const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics jumps
 const FITNESS_EPSILON        = 0.001;
 const NIGHT_SURVIVAL_RATE    = 0.75;
+const REPRODUCTION_RATE      = 0.5;
 
 // Phase cycle: fight → roam → mate → cull → (back to fight)
 const PHASES    = ['fight', 'roam', 'mate', 'cull'];
@@ -637,7 +638,7 @@ function _formatDecimalValue(value, suffix = '') {
 
 function _fitnessWeights(pool) {
   if (!pool.length) return [];
-  const minEnergy = pool.slice(1).reduce((min, agent) => Math.min(min, agent.energy), pool[0].energy);
+  const minEnergy = pool.reduce((min, agent) => Math.min(min, agent.energy), pool[0].energy);
   return pool.map(agent => agent.energy - minEnergy + FITNESS_EPSILON);
 }
 
@@ -742,7 +743,7 @@ function _calculateTargetSurvivors(selectableCount) {
 
 function runMatePhase() {
   const openSlots = MAX_POPULATION - agents.length;
-  const birthCount = Math.min(openSlots, Math.floor(agents.length / 2));
+  const birthCount = Math.min(openSlots, Math.floor(agents.length * REPRODUCTION_RATE));
 
   const parentWeights = _fitnessWeights(agents);
   const selectedParents = [];
@@ -754,10 +755,10 @@ function runMatePhase() {
     const parent = pick.item;
     selectedParents.push(parent);
 
-    const StrategyClass = Math.random() < mutationRate
+    const childStrategyClass = Math.random() < mutationRate
       ? _oppositeStrategyClass(parent.Class)
       : parent.Class;
-    const child = new Agent(StrategyClass);
+    const child = new Agent(childStrategyClass);
     child.energy = 1;
 
     child.sprite.position.copy(parent.sprite.position);
