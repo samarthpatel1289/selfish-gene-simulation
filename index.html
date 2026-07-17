@@ -309,7 +309,7 @@
         <span class="val"  id="val-injury">-2.0</span>
       </div>
       <div class="sl-row">
-        <label>🧬 Mutation</label>
+        <label for="sl-mutation">🧬 Mutation</label>
         <input type="range" id="sl-mutation" min="0" max="10" step="0.1" value="2.0" aria-label="Mutation rate percentage" />
         <span class="val"  id="val-mutation">2.0%</span>
       </div>
@@ -785,7 +785,8 @@ function runCullPhase() {
   agents.forEach(a => { a.age++; });
 
   const oldAgeDead = agents.filter(a => a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB);
-  const selectable = agents.filter(a => !oldAgeDead.includes(a));
+  const oldAgeDeadSet = new Set(oldAgeDead);
+  const selectable = agents.filter(a => !oldAgeDeadSet.has(a));
   const targetSurvivors = _calculateTargetSurvivors(selectable.length);
   const survivorWeights = _fitnessWeights(selectable);
   const survivors = selectable.length > targetSurvivors
