@@ -290,23 +290,28 @@
       <div class="slbl" style="margin-top:.2rem">Payoff Values</div>
       <div class="sl-row">
         <label>🏆 Win</label>
-        <input type="range" id="sl-win"    min="1" max="10" step="1" value="4" />
-        <span class="val"  id="val-win">4</span>
+        <input type="range" id="sl-win"    min="1" max="10" step="0.1" value="4.0" />
+        <span class="val"  id="val-win">4.0</span>
       </div>
       <div class="sl-row">
         <label>🤝 Draw</label>
-        <input type="range" id="sl-draw"   min="0" max="8"  step="1" value="2" />
-        <span class="val"  id="val-draw">2</span>
+        <input type="range" id="sl-draw"   min="0" max="8"  step="0.1" value="2.0" />
+        <span class="val"  id="val-draw">2.0</span>
       </div>
       <div class="sl-row">
         <label>😔 Loss</label>
-        <input type="range" id="sl-loss"   min="-4" max="2" step="1" value="0" />
-        <span class="val"  id="val-loss">0</span>
+        <input type="range" id="sl-loss"   min="-4" max="2" step="0.1" value="0.0" />
+        <span class="val"  id="val-loss">0.0</span>
       </div>
       <div class="sl-row">
         <label>🤕 Injury</label>
-        <input type="range" id="sl-injury" min="-10" max="-1" step="1" value="-2" />
-        <span class="val"  id="val-injury">-2</span>
+        <input type="range" id="sl-injury" min="-10" max="-1" step="0.1" value="-2.0" />
+        <span class="val"  id="val-injury">-2.0</span>
+      </div>
+      <div class="sl-row">
+        <label>🧬 Mutation</label>
+        <input type="range" id="sl-mutation" min="0" max="10" step="0.1" value="2.0" />
+        <span class="val"  id="val-mutation">2.0%</span>
       </div>
     </div>
 
@@ -548,12 +553,14 @@ let simType  = 'hd';   // 'hd' (Hawk/Dove) or 'bi' (Bourgeois/Intruder)
 let round    = 0;
 let running  = false;
 let simSpeed = 2;
+let mutationRate = 0.02;
 
 // Game-balance constants — easy to tune in one place
-const MIN_ENERGY_THRESHOLD   = -4;  // energy below this kills an agent
 const MAX_AGE                = 9;   // rounds before old-age death is possible
 const OLD_AGE_DEATH_PROB     = 0.3; // probability of dying each round past MAX_AGE
 const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics jumps
+const FITNESS_EPSILON        = 0.001;
+const NIGHT_SURVIVAL_RATE    = 0.75;
 
 // Phase cycle: fight → roam → mate → cull → (back to fight)
 const PHASES    = ['fight', 'roam', 'mate', 'cull'];
@@ -562,7 +569,7 @@ const PHASE_HUD = {
   fight: '🌅 Fight Phase — territories are contested',
   roam:  '☀️  Roaming',
   mate:  '🌇 Mate Phase — offspring are born',
-  cull:  '🌙 Night — weak agents die',
+  cull:  '🌙 Night — fitness shapes survival',
 };
 const PHASE_SKY = {
   fight: new THREE.Color(0x5c2020),
@@ -612,6 +619,50 @@ function _assignBourgeoisHomes() {
       t.disc.material.color.setHex(0x15803d); // green = owned
     }
   });
+}
+
+function _strategyPair() {
+  return simType === 'hd' ? [Hawk, Dove] : [Bourgeois, Intruder];
+}
+
+function _oppositeStrategyClass(StrategyClass) {
+  const [classA, classB] = _strategyPair();
+  return StrategyClass === classA ? classB : classA;
+}
+
+function _fitnessWeights(pool) {
+  if (!pool.length) return [];
+  const minEnergy = Math.min(...pool.map(agent => agent.energy));
+  return pool.map(agent => agent.energy - minEnergy + FITNESS_EPSILON);
+}
+
+function _weightedPick(items, weights) {
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (!items.length || totalWeight <= 0) return null;
+
+  let roll = Math.random() * totalWeight;
+  for (let i = 0; i < items.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+function _weightedSampleWithoutReplacement(items, count, weights) {
+  const poolItems   = [...items];
+  const poolWeights = [...weights];
+  const picked      = [];
+
+  while (picked.length < count && poolItems.length) {
+    const item = _weightedPick(poolItems, poolWeights);
+    if (!item) break;
+    const idx = poolItems.indexOf(item);
+    picked.push(item);
+    poolItems.splice(idx, 1);
+    poolWeights.splice(idx, 1);
+  }
+
+  return picked;
 }
 
 /* ─── Fight Phase ───────────────────────────────────────────── */
@@ -674,57 +725,65 @@ function runFightPhase() {
 
 /* ─── Mate Phase ────────────────────────────────────────────── */
 
-const MATE_THRESHOLD = 3;
 const MAX_POPULATION = 28;
 
 function runMatePhase() {
-  const eligible = agents.filter(a => a.energy >= MATE_THRESHOLD);
+  const openSlots = MAX_POPULATION - agents.length;
+  const birthCount = Math.min(openSlots, Math.floor(agents.length / 2));
 
-  // Move eligible agents to mate zone (center)
-  eligible.forEach(a => {
-    const angle = Math.random() * TWO_PI;
-    a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
-  });
-
-  // Produce one offspring per two eligible parents
+  const parentWeights = _fitnessWeights(agents);
+  const selectedParents = [];
   const newborns = [];
-  for (let i = 0; i + 1 < eligible.length; i += 2) {
-    if (agents.length + newborns.length >= MAX_POPULATION) break;
-    const parent = eligible[i];
-    const child  = new Agent(parent.Class);
+
+  for (let i = 0; i < birthCount; i++) {
+    const parent = _weightedPick(agents, parentWeights);
+    if (!parent) break;
+    selectedParents.push(parent);
+
+    const StrategyClass = Math.random() < mutationRate
+      ? _oppositeStrategyClass(parent.Class)
+      : parent.Class;
+    const child = new Agent(StrategyClass);
     child.energy = 1;
-    // Spawn near parent
+
     child.sprite.position.copy(parent.sprite.position);
     child._target.copy(parent.sprite.position);
     child.pulse(2.5, 400);
     newborns.push(child);
   }
+
+  const selectedParentSet = new Set(selectedParents);
+  [...selectedParentSet].forEach(a => {
+    const angle = Math.random() * TWO_PI;
+    a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
+  });
+
   agents.push(...newborns);
 
   // Send everyone else to wander
-  agents.filter(a => !eligible.includes(a)).forEach(a => a.wander());
+  agents.filter(a => !selectedParentSet.has(a)).forEach(a => a.wander());
 }
 
 /* ─── Cull Phase ────────────────────────────────────────────── */
 
 function runCullPhase() {
-  const dead = [];
-  agents.forEach(a => {
-    a.age++;
-    const tooWeak = a.energy < MIN_ENERGY_THRESHOLD;
-    const oldAge  = a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB;
-    if (tooWeak || oldAge) dead.push(a);
-  });
+  agents.forEach(a => { a.age++; });
 
-  // If over population cap, remove the weakest excess agents
-  if (agents.length - dead.length > MAX_POPULATION) {
-    const alive = agents.filter(a => !dead.includes(a));
-    alive.sort((a, b) => a.energy - b.energy);
-    const excess = alive.length - MAX_POPULATION;
-    for (let i = 0; i < excess; i++) dead.push(alive[i]);
-  }
+  const oldAgeDead = agents.filter(a => a.age > MAX_AGE && Math.random() < OLD_AGE_DEATH_PROB);
+  const selectable = agents.filter(a => !oldAgeDead.includes(a));
+  const targetSurvivors = Math.min(
+    MAX_POPULATION,
+    Math.max(1, Math.ceil(selectable.length * NIGHT_SURVIVAL_RATE))
+  );
+  const survivorWeights = _fitnessWeights(selectable);
+  const survivors = selectable.length > targetSurvivors
+    ? _weightedSampleWithoutReplacement(selectable, targetSurvivors, survivorWeights)
+    : selectable;
+  const survivorSet = new Set(survivors);
+  const dead = agents.filter(a => !survivorSet.has(a));
 
-  dead.forEach(a => { a.dispose(); agents = agents.filter(x => x !== a); });
+  dead.forEach(a => { a.dispose(); });
+  agents = survivors;
 
   // After culling, scatter everyone
   agents.forEach(a => a.wander(5));
@@ -895,9 +954,15 @@ document.getElementById('sl-speed').addEventListener('input', e => {
 // Payoff sliders — take effect immediately
 ['win', 'draw', 'loss', 'injury'].forEach(k => {
   document.getElementById('sl-' + k).addEventListener('input', e => {
-    payoff[k] = +e.target.value;
-    document.getElementById('val-' + k).textContent = e.target.value;
+    payoff[k] = Number.parseFloat(e.target.value);
+    document.getElementById('val-' + k).textContent = payoff[k].toFixed(1);
   });
+});
+
+document.getElementById('sl-mutation').addEventListener('input', e => {
+  const mutationPercent = Number.parseFloat(e.target.value);
+  mutationRate = mutationPercent / 100;
+  document.getElementById('val-mutation').textContent = mutationPercent.toFixed(1) + '%';
 });
 
 // Sim type tabs

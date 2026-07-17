@@ -17,9 +17,9 @@ Open **`index.html`** directly in any modern browser — no server or build step
   - 🌅 **Fight Phase** — agents rush to territories; contested patches glow red
   - ☀️ **Roaming** — agents wander freely between rounds
   - 🌇 **Mate Phase** — agents with enough energy reproduce in the green centre zone
-  - 🌙 **Night** — weak or old agents die off
+  - 🌙 **Night** — fitness-proportional selection trims the population, while old age can still claim agents
 - 📊 **Live population chart** on the right updates every round
-- 🎛️ Sliders for speed, starting population, and payoff values
+- 🎛️ Sliders for speed, starting population, decimal payoff values, and mutation rate
 
 ---
 
@@ -77,4 +77,3 @@ The **ESS** depends on payoff values. If injury is cheap, Hawks dominate. If inj
 | Intruder vs Intruder        | Both fight — costly, like Hawk vs Hawk    |
 
 Bourgeois is typically the **ESS** because the "owner wins" convention eliminates injuries entirely.
-
