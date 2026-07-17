@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Selfish Gene — Game Theory Simulations</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & base ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Typography helpers ─────────────────────────────────── */
+    h1 { font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: 800; }
+    h2 { font-size: clamp(1.1rem, 3vw, 1.5rem); font-weight: 700; }
+    h3 { font-size: 1rem; font-weight: 600; }
+    p  { line-height: 1.65; }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #1e1b4b 50%, #3b0764 100%);
+      padding: 2.5rem 1.25rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+    }
+    header .subtitle {
+      color: #94a3b8;
+      margin-top: .5rem;
+      font-size: clamp(.85rem, 2.5vw, 1rem);
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+    .badge {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 99px;
+      padding: .25rem .75rem;
+      font-size: .75rem;
+      color: #cbd5e1;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    section { margin-bottom: 2.5rem; }
+
+    /* ── Cards ──────────────────────────────────────────────── */
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .card + .card { margin-top: 1.25rem; }
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      margin-bottom: 1rem;
+    }
+    .card-title .icon {
+      width: 2rem; height: 2rem;
+      border-radius: .5rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .icon-hawk  { background: linear-gradient(135deg,#dc2626,#7f1d1d); }
+    .icon-dove  { background: linear-gradient(135deg,#0284c7,#1e3a5f); }
+    .icon-home  { background: linear-gradient(135deg,#16a34a,#14532d); }
+    .icon-param { background: linear-gradient(135deg,#d97706,#78350f); }
+
+    /* ── Controls ───────────────────────────────────────────── */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+    .param-block label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .85rem;
+      font-weight: 600;
+      margin-bottom: .4rem;
+      color: #cbd5e1;
+    }
+    .param-block label span {
+      color: #38bdf8;
+      font-weight: 700;
+      min-width: 2.5rem;
+      text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #334155;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #0f172a;
+      cursor: pointer;
+    }
+
+    /* ── Simulation layout ──────────────────────────────────── */
+    .sim-section-title {
+      display: flex; align-items: center; gap: .5rem;
+      margin-bottom: 1rem;
+      padding-bottom: .75rem;
+      border-bottom: 1px solid #334155;
+    }
+    .sim-section-title .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .dot-hawk { background: #ef4444; }
+    .dot-dove { background: #38bdf8; }
+    .dot-bourgeois { background: #22c55e; }
+    .dot-intruder  { background: #f97316; }
+
+    .description-box {
+      background: rgba(255,255,255,.03);
+      border-left: 3px solid;
+      border-radius: 0 .5rem .5rem 0;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+      font-size: .9rem;
+      color: #94a3b8;
+    }
+    .description-box.hawk  { border-color: #ef4444; }
+    .description-box.dove  { border-color: #38bdf8; }
+    .description-box.bourg { border-color: #22c55e; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── Payoff table ───────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+    }
+    th, td {
+      padding: .55rem .75rem;
+      border: 1px solid #334155;
+      text-align: center;
+    }
+    th { background: #0f172a; font-weight: 600; color: #94a3b8; }
+    td.label-cell { font-weight: 600; background: #0f172a; color: #94a3b8; text-align: left; }
+    td.positive { color: #4ade80; }
+    td.negative { color: #f87171; }
+    td.neutral  { color: #fbbf24; }
+
+    /* ── Chart containers ───────────────────────────────────── */
+    .chart-container {
+      position: relative;
+      height: 220px;
+    }
+    .chart-container-wide {
+      position: relative;
+      height: 260px;
+      margin-top: 1.25rem;
+    }
+
+    /* ── ESS badge ──────────────────────────────────────────── */
+    .ess-box {
+      margin-top: 1.25rem;
+      padding: 1rem;
+      border-radius: .75rem;
+      border: 1px solid;
+      font-size: .9rem;
+    }
+    .ess-box.stable   { background: rgba(34,197,94,.08);  border-color: rgba(34,197,94,.35); }
+    .ess-box.mixed    { background: rgba(251,191,36,.08);  border-color: rgba(251,191,36,.35); }
+    .ess-box.unstable { background: rgba(239,68,68,.08);   border-color: rgba(239,68,68,.35); }
+    .ess-box h3 { margin-bottom: .3rem; }
+    .ess-box.stable   h3 { color: #4ade80; }
+    .ess-box.mixed    h3 { color: #fbbf24; }
+    .ess-box.unstable h3 { color: #f87171; }
+
+    /* ── Responsive tweaks ──────────────────────────────────── */
+    @media (max-width: 480px) {
+      .card { padding: 1rem; }
+      main  { padding: 1rem .75rem 2.5rem; }
+    }
+
+    /* ── Scroll-nav tabs ─────────────────────────────────────── */
+    .nav-tabs {
+      display: flex;
+      gap: .5rem;
+      overflow-x: auto;
+      padding-bottom: .5rem;
+      margin-bottom: 1.5rem;
+      -webkit-overflow-scrolling: touch;
+    }
+    .nav-tab {
+      flex-shrink: 0;
+      padding: .45rem 1.1rem;
+      border-radius: 99px;
+      border: 1px solid #334155;
+      background: transparent;
+      color: #94a3b8;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s, color .15s;
+    }
+    .nav-tab:hover { background: #1e293b; color: #e2e8f0; }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 1.5rem 1rem;
+      color: #475569;
+      font-size: .8rem;
+      border-top: 1px solid #1e293b;
+    }
+    footer a { color: #38bdf8; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- HEADER                                                     -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<header>
+  <h1>🧬 The Selfish Gene</h1>
+  <p class="subtitle">Interactive Game Theory Simulations — Hawk vs Dove &amp; Bourgeois vs Intruder</p>
+  <div class="badge-row">
+    <span class="badge">📖 Based on Richard Dawkins' book</span>
+    <span class="badge">🎮 Adjust payoffs in real-time</span>
+    <span class="badge">📱 Mobile-friendly</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- MAIN                                                        -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<main>
+
+  <!-- Quick nav -->
+  <nav>
+    <div class="nav-tabs">
+      <a class="nav-tab" href="#controls">⚙️ Payoff Settings</a>
+      <a class="nav-tab" href="#hawk-dove">🦅🕊️ Hawk vs Dove</a>
+      <a class="nav-tab" href="#bourgeois">🏠⚔️ Bourgeois vs Intruder</a>
+    </div>
+  </nav>
+
+  <!-- ── PAYOFF CONTROLS ─────────────────────────────────────── -->
+  <section id="controls">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-param">⚙️</div>
+        <h2>Payoff Settings</h2>
+      </div>
+      <p style="font-size:.9rem;color:#94a3b8;margin-bottom:1.25rem;">
+        Drag the sliders to adjust the reward and cost values used in every simulation below. All charts update instantly.
+      </p>
+      <div class="controls-grid">
+        <div class="param-block">
+          <label>🏆 Win (resource value) <span id="val-win">4</span></label>
+          <input id="sl-win" type="range" min="1" max="20" step="1" value="4" />
+        </div>
+        <div class="param-block">
+          <label>🤝 Draw (share value) <span id="val-draw">2</span></label>
+          <input id="sl-draw" type="range" min="0" max="15" step="1" value="2" />
+        </div>
+        <div class="param-block">
+          <label>😔 Loss (retreat cost) <span id="val-loss">0</span></label>
+          <input id="sl-loss" type="range" min="-5" max="5" step="1" value="0" />
+        </div>
+        <div class="param-block">
+          <label>🤕 Injury (fight cost) <span id="val-injury">-2</span></label>
+          <input id="sl-injury" type="range" min="-20" max="0" step="1" value="-2" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HAWK VS DOVE ────────────────────────────────────────── -->
+  <section id="hawk-dove">
+    <div class="card">
+      <div class="sim-section-title">
+        <span class="dot dot-hawk"></span>
+        <h2>Hawk vs Dove Simulation</h2>
+        <span class="dot dot-dove"></span>
+      </div>
+
+      <div class="description-box hawk">
+        <strong>🦅 Hawk</strong> — always fights aggressively for a resource. If it meets another Hawk, they battle until one is injured.
+        <br/><br/>
+        <strong>🕊️ Dove</strong> — displays peacefully and retreats rather than risk injury. Against a Hawk it always backs down; against another Dove they share.
+      </div>
+
+      <div class="two-col">
+        <!-- Payoff matrix -->
+        <div>
+          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Payoff Matrix (per player)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>vs →</th>
+                  <th>🦅 Hawk</th>
+                  <th>🕊️ Dove</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="label-cell">🦅 Hawk</td>
+                  <td id="hd-hh">—</td>
+                  <td id="hd-hd">—</td>
+                </tr>
+                <tr>
+                  <td class="label-cell">🕊️ Dove</td>
+                  <td id="hd-dh">—</td>
+                  <td id="hd-dd">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:.75rem;color:#475569;margin-top:.5rem;">Each cell shows the payoff for the <em>row</em> player.</p>
+        </div>
+
+        <!-- Bar chart -->
+        <div>
+          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Matchup Payoffs</h3>
+          <div class="chart-container">
+            <canvas id="chart-hd-bar"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Population dynamics chart -->
+      <h3 style="margin-bottom:.5rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Population Dynamics — Average Payoff vs % Hawks in Population</h3>
+      <p style="font-size:.85rem;color:#64748b;margin-bottom:.75rem;">
+        Shows how much each strategy earns on average as the proportion of Hawks in the population changes. Where the lines <strong>cross</strong> is the mixed Evolutionarily Stable Strategy (ESS).
+      </p>
+      <div class="chart-container-wide">
+        <canvas id="chart-hd-pop"></canvas>
+      </div>
+
+      <!-- ESS analysis -->
+      <div id="hd-ess-box" class="ess-box stable">
+        <h3 id="hd-ess-title">Calculating…</h3>
+        <p  id="hd-ess-desc"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── BOURGEOIS VS INTRUDER ───────────────────────────────── -->
+  <section id="bourgeois">
+    <div class="card">
+      <div class="sim-section-title">
+        <span class="dot dot-bourgeois"></span>
+        <h2>Bourgeois vs Intruder Simulation</h2>
+        <span class="dot dot-intruder"></span>
+      </div>
+
+      <div class="description-box bourg">
+        <strong>🏠 Bourgeois</strong> — plays <em>"owner wins"</em>: fights like a Hawk when at home, retreats like a Dove when intruding elsewhere.
+        <br/><br/>
+        <strong>⚔️ Intruder</strong> — always attacks, regardless of ownership. Equivalent to a pure Hawk that ignores ownership conventions.
+        <br/><br/>
+        💡 <em>Bourgeois wins because both sides agree on the ownership rule — no costly injuries ever happen!</em>
+      </div>
+
+      <div class="two-col">
+        <!-- Payoff matrix -->
+        <div>
+          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Payoff Matrix (per player)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>vs →</th>
+                  <th>🏠 Bourgeois</th>
+                  <th>⚔️ Intruder</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="label-cell">🏠 Bourgeois</td>
+                  <td id="bi-bb">—</td>
+                  <td id="bi-bi">—</td>
+                </tr>
+                <tr>
+                  <td class="label-cell">⚔️ Intruder</td>
+                  <td id="bi-ib">—</td>
+                  <td id="bi-ii">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:.75rem;color:#475569;margin-top:.5rem;">Each cell shows the payoff for the <em>row</em> player.</p>
+        </div>
+
+        <!-- Bar chart -->
+        <div>
+          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Matchup Payoffs</h3>
+          <div class="chart-container">
+            <canvas id="chart-bi-bar"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Population dynamics chart -->
+      <h3 style="margin-bottom:.5rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Population Dynamics — Average Payoff vs % Intruders in Population</h3>
+      <p style="font-size:.85rem;color:#64748b;margin-bottom:.75rem;">
+        Shows each strategy's average payoff as the proportion of Intruders rises. If Bourgeois stays <strong>above</strong> Intruder at every point, it is the dominant ESS.
+      </p>
+      <div class="chart-container-wide">
+        <canvas id="chart-bi-pop"></canvas>
+      </div>
+
+      <!-- ESS analysis -->
+      <div id="bi-ess-box" class="ess-box stable">
+        <h3 id="bi-ess-title">Calculating…</h3>
+        <p  id="bi-ess-desc"></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    Built to explore <em>The Selfish Gene</em> (1976) by Richard Dawkins ·
+    <a href="https://github.com/samarthpatel1289/selfish-gene-simulation" target="_blank" rel="noopener">View source on GitHub</a>
+  </p>
+</footer>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- JAVASCRIPT                                                  -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+// ── Simulation logic (mirrors simulations.py) ──────────────────
+
+class Payoff {
+  constructor(win = 4, loss = 0, draw = 2, injury = -2) {
+    this.win    = win;
+    this.loss   = loss;
+    this.draw   = draw;
+    this.injury = injury;
+  }
+}
+
+class HawkVsDoveSimulation {
+  constructor(payoff) {
+    this.payoff = payoff || new Payoff();
+  }
+
+  /** When two Hawks fight: one wins, one is injured (expected value per player) */
+  hawkVsHawk() {
+    return (this.payoff.win + this.payoff.injury) / 2;
+  }
+
+  /** Hawk meets Dove: Hawk wins, Dove retreats without fight */
+  hawkVsDove() {
+    return { hawk: this.payoff.win, dove: this.payoff.loss };
+  }
+
+  /** Dove meets Hawk: Dove retreats (same as above from Dove's perspective) */
+  doveVsHawk() {
+    return { dove: this.payoff.loss, hawk: this.payoff.win };
+  }
+
+  /** Two Doves share the resource equally */
+  doveVsDove() {
+    return this.payoff.draw;
+  }
+
+  /**
+   * Expected payoff for Hawk in a population where proportion p are Hawks.
+   * E(Hawk) = p * E(H,H) + (1-p) * E(H,D)
+   */
+  expectedHawk(p) {
+    return p * this.hawkVsHawk() + (1 - p) * this.hawkVsDove().hawk;
+  }
+
+  /**
+   * Expected payoff for Dove in a population where proportion p are Hawks.
+   * E(Dove) = p * E(D,H) + (1-p) * E(D,D)
+   */
+  expectedDove(p) {
+    return p * this.doveVsHawk().dove + (1 - p) * this.doveVsDove();
+  }
+
+  /**
+   * Find the mixed ESS equilibrium (proportion of Hawks p* where E(H)=E(D)).
+   * Returns a number in [0,1] or null if corner solution (pure strategy dominates).
+   */
+  essProportionHawks() {
+    // E(H) = E(D) => p*(H,H) + (1-p)*(H,D) = p*(D,H) + (1-p)*(D,D)
+    // p*(H,H - H,D - D,H + D,D) = D,D - H,D
+    const a = this.hawkVsHawk();
+    const b = this.hawkVsDove().hawk;
+    const c = this.doveVsHawk().dove;
+    const d = this.doveVsDove();
+    const denom = a - b - c + d;
+    if (Math.abs(denom) < 1e-9) return null; // Parallel lines
+    const p = (d - b) / denom;
+    if (p < 0) return 0;
+    if (p > 1) return 1;
+    return p;
+  }
+
+  run() {
+    return {
+      "Hawk vs Hawk (each)":  this.hawkVsHawk(),
+      "Hawk vs Dove (Hawk)":  this.hawkVsDove().hawk,
+      "Hawk vs Dove (Dove)":  this.hawkVsDove().dove,
+      "Dove vs Dove (each)":  this.doveVsDove(),
+    };
+  }
+}
+
+class BourgeoisVsIntruderSimulation {
+  constructor(payoff) {
+    this.payoff = payoff || new Payoff();
+  }
+
+  /**
+   * Bourgeois vs Bourgeois: Each time they meet, one is the owner (wins) and
+   * one is the visitor (retreats). Average = (win + loss) / 2.
+   */
+  bourgeoisVsBourgeois() {
+    return (this.payoff.win + this.payoff.loss) / 2;
+  }
+
+  /**
+   * Bourgeois vs Intruder: Bourgeois is at home → defends and wins.
+   * (No costly fight because Intruder still loses to determined defender.)
+   */
+  bourgeoisVsIntruderAtHome() {
+    return { bourgeois: this.payoff.win, intruder: this.payoff.loss };
+  }
+
+  /**
+   * Bourgeois away (intruding) vs Intruder at that location → Bourgeois retreats.
+   */
+  bourgeoisVsIntruderAway() {
+    return { bourgeois: this.payoff.loss, intruder: this.payoff.win };
+  }
+
+  /**
+   * Bourgeois average vs Intruder: 50% chance at home, 50% away.
+   */
+  bourgeoisVsIntruderAvg() {
+    return (this.payoff.win + this.payoff.loss) / 2;
+  }
+
+  /**
+   * Intruder vs Intruder: Both fight like Hawks — costly battle.
+   */
+  intruderVsIntruder() {
+    return (this.payoff.win + this.payoff.injury) / 2;
+  }
+
+  /**
+   * Expected payoff for Bourgeois in a population where proportion q are Intruders.
+   * E(B) = (1-q) * B_vs_B + q * B_vs_I_avg
+   */
+  expectedBourgeois(q) {
+    return (1 - q) * this.bourgeoisVsBourgeois() + q * this.bourgeoisVsIntruderAvg();
+  }
+
+  /**
+   * Expected payoff for Intruder in a population where proportion q are Intruders.
+   * E(I) = (1-q) * I_vs_B + q * I_vs_I
+   */
+  expectedIntruder(q) {
+    // Against a Bourgeois: 50% Bourgeois is at home (I loses), 50% away (I wins)
+    const iVsB = (this.payoff.win + this.payoff.loss) / 2;
+    return (1 - q) * iVsB + q * this.intruderVsIntruder();
+  }
+
+  run() {
+    return {
+      "Bourgeois vs Bourgeois":          this.bourgeoisVsBourgeois(),
+      "Bourgeois at home vs Intruder":   this.bourgeoisVsIntruderAtHome().bourgeois,
+      "Intruder vs Bourgeois at home":   this.bourgeoisVsIntruderAtHome().intruder,
+      "Bourgeois away vs Intruder":      this.bourgeoisVsIntruderAway().bourgeois,
+      "Intruder vs Bourgeois away":      this.bourgeoisVsIntruderAway().intruder,
+      "Intruder vs Intruder":            this.intruderVsIntruder(),
+    };
+  }
+}
+
+// ── Chart helpers ──────────────────────────────────────────────
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: { color: "#94a3b8", font: { size: 12 } }
+    },
+    tooltip: {
+      callbacks: {
+        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`
+      }
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: "#64748b", font: { size: 11 } },
+      grid:  { color: "#1e293b" }
+    },
+    y: {
+      ticks: { color: "#64748b", font: { size: 11 } },
+      grid:  { color: "#334155" }
+    }
+  }
+};
+
+function makeBarChart(id, labels, datasets) {
+  return new Chart(document.getElementById(id), {
+    type: "bar",
+    data: { labels, datasets },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        legend: { display: false }
+      },
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        y: {
+          ...CHART_DEFAULTS.scales.y,
+          beginAtZero: false
+        }
+      }
+    }
+  });
+}
+
+function makeLineChart(id, datasets) {
+  const labels = Array.from({ length: 101 }, (_, i) => (i / 100).toFixed(2));
+  return new Chart(document.getElementById(id), {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      ...CHART_DEFAULTS,
+      elements: {
+        point: { radius: 0 },
+        line:  { borderWidth: 2.5, tension: 0 }
+      },
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        x: {
+          ...CHART_DEFAULTS.scales.x,
+          ticks: {
+            color: "#64748b",
+            font: { size: 10 },
+            maxTicksLimit: 11,
+            callback: (val, idx) => idx % 10 === 0 ? `${idx}%` : ""
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Cell coloring ──────────────────────────────────────────────
+
+function colorClass(v) {
+  if (v > 0) return "positive";
+  if (v < 0) return "negative";
+  return "neutral";
+}
+
+function setCell(id, value) {
+  const el = document.getElementById(id);
+  el.textContent = value.toFixed(2);
+  el.className = colorClass(value);
+}
+
+// ── ESS analysis text ──────────────────────────────────────────
+
+function updateHdEss(sim) {
+  const p = sim.essProportionHawks();
+  const box   = document.getElementById("hd-ess-box");
+  const title = document.getElementById("hd-ess-title");
+  const desc  = document.getElementById("hd-ess-desc");
+
+  const a = sim.hawkVsHawk();
+  const b = sim.hawkVsDove().hawk;
+  const c = sim.doveVsHawk().dove;
+  const d = sim.doveVsDove();
+
+  if (p === 1) {
+    box.className = "ess-box unstable";
+    title.textContent = "⚔️ Pure Hawk ESS";
+    desc.textContent =
+      "With these payoffs, Hawks always outperform Doves. The population converges to 100 % Hawks — " +
+      "but everyone suffers because of constant costly fights.";
+  } else if (p === 0) {
+    box.className = "ess-box stable";
+    title.textContent = "🕊️ Pure Dove ESS";
+    desc.textContent =
+      "With these payoffs, Doves always outperform Hawks. The population converges to 100 % Doves — " +
+      "peaceful sharing dominates because fights are too costly.";
+  } else {
+    const pct = (p * 100).toFixed(1);
+    box.className = "ess-box mixed";
+    title.textContent = `🔀 Mixed ESS — ${pct}% Hawks, ${(100 - p * 100).toFixed(1)}% Doves`;
+    desc.textContent =
+      `At this payoff balance, neither strategy can invade the other. ` +
+      `If Hawks exceed ${pct}%, Doves earn more (Hawks start injuring each other too often). ` +
+      `If Hawks drop below ${pct}%, Hawks earn more (easy pickings against all Doves). ` +
+      `The population stabilises at this mix.`;
+  }
+}
+
+function updateBiEss(sim) {
+  const box   = document.getElementById("bi-ess-box");
+  const title = document.getElementById("bi-ess-title");
+  const desc  = document.getElementById("bi-ess-desc");
+
+  // Check if Bourgeois is dominant at all q in [0,1]
+  const eB0 = sim.expectedBourgeois(0);
+  const eI0 = sim.expectedIntruder(0);
+  const eB1 = sim.expectedBourgeois(1);
+  const eI1 = sim.expectedIntruder(1);
+
+  if (eB0 >= eI0 && eB1 >= eI1) {
+    box.className = "ess-box stable";
+    title.textContent = "🏠 Bourgeois is the ESS — Ownership Convention Wins!";
+    desc.textContent =
+      "Bourgeois outperforms Intruder at every population mix. " +
+      "By respecting the 'owner wins' rule, conflicts are resolved without costly injuries. " +
+      "Intruders can never invade a Bourgeois population because they suffer from unnecessary battles.";
+  } else if (eI0 > eB0 && eI1 > eB1) {
+    box.className = "ess-box unstable";
+    title.textContent = "⚔️ Intruder dominates";
+    desc.textContent =
+      "With these payoffs, aggressive Intruders outperform Bourgeois at every population ratio. " +
+      "Try increasing the Injury cost to see the Bourgeois strategy emerge as the stable equilibrium.";
+  } else {
+    box.className = "ess-box mixed";
+    title.textContent = "🔀 Mixed Equilibrium";
+    desc.textContent =
+      "With these payoffs the strategies are similarly matched — neither fully dominates. " +
+      "Adjust the Injury slider to shift the balance toward the Bourgeois (ownership) ESS.";
+  }
+}
+
+// ── Main update function ───────────────────────────────────────
+
+let hdBarChart, hdPopChart, biBarChart, biPopChart;
+
+function buildCharts(hdSim, biSim) {
+  const pRange = Array.from({ length: 101 }, (_, i) => i / 100);
+
+  // ── Hawk vs Dove bar chart ──
+  const hdResults = hdSim.run();
+  hdBarChart = makeBarChart(
+    "chart-hd-bar",
+    ["H vs H", "H vs D (H)", "D vs H (D)", "D vs D"],
+    [{
+      label: "Payoff",
+      data: Object.values(hdResults),
+      backgroundColor: [
+        "rgba(239,68,68,.75)",
+        "rgba(239,68,68,.75)",
+        "rgba(56,189,248,.75)",
+        "rgba(56,189,248,.75)"
+      ],
+      borderColor: [
+        "#ef4444", "#ef4444", "#38bdf8", "#38bdf8"
+      ],
+      borderWidth: 1.5,
+      borderRadius: 5,
+    }]
+  );
+
+  // ── Hawk vs Dove population dynamics ──
+  hdPopChart = makeLineChart("chart-hd-pop", [
+    {
+      label: "🦅 Hawk avg payoff",
+      data: pRange.map(p => hdSim.expectedHawk(p)),
+      borderColor: "#ef4444",
+      backgroundColor: "rgba(239,68,68,.08)"
+    },
+    {
+      label: "🕊️ Dove avg payoff",
+      data: pRange.map(p => hdSim.expectedDove(p)),
+      borderColor: "#38bdf8",
+      backgroundColor: "rgba(56,189,248,.08)"
+    }
+  ]);
+
+  // ── Bourgeois vs Intruder bar chart ──
+  const biResults = biSim.run();
+  biBarChart = makeBarChart(
+    "chart-bi-bar",
+    ["B vs B", "B@home vs I", "I vs B@home", "I vs I"],
+    [{
+      label: "Payoff",
+      data: [
+        biResults["Bourgeois vs Bourgeois"],
+        biResults["Bourgeois at home vs Intruder"],
+        biResults["Intruder vs Bourgeois at home"],
+        biResults["Intruder vs Intruder"],
+      ],
+      backgroundColor: [
+        "rgba(34,197,94,.75)",
+        "rgba(34,197,94,.75)",
+        "rgba(249,115,22,.75)",
+        "rgba(249,115,22,.75)"
+      ],
+      borderColor: [
+        "#22c55e", "#22c55e", "#f97316", "#f97316"
+      ],
+      borderWidth: 1.5,
+      borderRadius: 5,
+    }]
+  );
+
+  // ── Bourgeois vs Intruder population dynamics ──
+  biPopChart = makeLineChart("chart-bi-pop", [
+    {
+      label: "🏠 Bourgeois avg payoff",
+      data: pRange.map(q => biSim.expectedBourgeois(q)),
+      borderColor: "#22c55e",
+      backgroundColor: "rgba(34,197,94,.08)"
+    },
+    {
+      label: "⚔️ Intruder avg payoff",
+      data: pRange.map(q => biSim.expectedIntruder(q)),
+      borderColor: "#f97316",
+      backgroundColor: "rgba(249,115,22,.08)"
+    }
+  ]);
+}
+
+function updateCharts(hdSim, biSim) {
+  const pRange = Array.from({ length: 101 }, (_, i) => i / 100);
+
+  // Update HD bar
+  const hdR = hdSim.run();
+  hdBarChart.data.datasets[0].data = Object.values(hdR);
+  hdBarChart.update();
+
+  // Update HD pop
+  hdPopChart.data.datasets[0].data = pRange.map(p => hdSim.expectedHawk(p));
+  hdPopChart.data.datasets[1].data = pRange.map(p => hdSim.expectedDove(p));
+  hdPopChart.update();
+
+  // Update BI bar
+  const biR = biSim.run();
+  biBarChart.data.datasets[0].data = [
+    biR["Bourgeois vs Bourgeois"],
+    biR["Bourgeois at home vs Intruder"],
+    biR["Intruder vs Bourgeois at home"],
+    biR["Intruder vs Intruder"],
+  ];
+  biBarChart.update();
+
+  // Update BI pop
+  biPopChart.data.datasets[0].data = pRange.map(q => biSim.expectedBourgeois(q));
+  biPopChart.data.datasets[1].data = pRange.map(q => biSim.expectedIntruder(q));
+  biPopChart.update();
+}
+
+function refreshAll() {
+  const win    = +document.getElementById("sl-win").value;
+  const draw   = +document.getElementById("sl-draw").value;
+  const loss   = +document.getElementById("sl-loss").value;
+  const injury = +document.getElementById("sl-injury").value;
+
+  // Update display labels
+  document.getElementById("val-win").textContent    = win;
+  document.getElementById("val-draw").textContent   = draw;
+  document.getElementById("val-loss").textContent   = loss;
+  document.getElementById("val-injury").textContent = injury;
+
+  const p = new Payoff(win, loss, draw, injury);
+  const hdSim = new HawkVsDoveSimulation(p);
+  const biSim = new BourgeoisVsIntruderSimulation(p);
+
+  // ── Update payoff matrix cells ──
+
+  // Hawk vs Dove
+  setCell("hd-hh", hdSim.hawkVsHawk());
+  setCell("hd-hd", hdSim.hawkVsDove().hawk);
+  setCell("hd-dh", hdSim.doveVsHawk().dove);
+  setCell("hd-dd", hdSim.doveVsDove());
+
+  // Bourgeois vs Intruder
+  setCell("bi-bb", biSim.bourgeoisVsBourgeois());
+  setCell("bi-bi", biSim.bourgeoisVsIntruderAvg());
+  setCell("bi-ib", (p.win + p.loss) / 2);
+  setCell("bi-ii", biSim.intruderVsIntruder());
+
+  // ── Update charts ──
+  if (hdBarChart) {
+    updateCharts(hdSim, biSim);
+  } else {
+    buildCharts(hdSim, biSim);
+  }
+
+  // ── Update ESS analysis ──
+  updateHdEss(hdSim);
+  updateBiEss(biSim);
+}
+
+// ── Wire up sliders ────────────────────────────────────────────
+
+["sl-win", "sl-draw", "sl-loss", "sl-injury"].forEach(id => {
+  document.getElementById(id).addEventListener("input", refreshAll);
+});
+
+// ── Initial render ─────────────────────────────────────────────
+refreshAll();
+</script>
+</body>
+</html>
