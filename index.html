@@ -3,949 +3,921 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Selfish Gene — Game Theory Simulations</title>
+  <title>🧬 Selfish Gene — 3D Simulation</title>
+
+  <!-- Chart.js (UMD, loaded before the ES-module script below) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Three.js + OrbitControls via importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+    }
+  }
+  </script>
+
   <style>
-    /* ── Reset & base ───────────────────────────────────────── */
+    /* ─── Reset ──────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #0f172a;
       color: #e2e8f0;
-      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
     }
 
-    /* ── Typography helpers ─────────────────────────────────── */
-    h1 { font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: 800; }
-    h2 { font-size: clamp(1.1rem, 3vw, 1.5rem); font-weight: 700; }
-    h3 { font-size: 1rem; font-weight: 600; }
-    p  { line-height: 1.65; }
-
-    /* ── Header ─────────────────────────────────────────────── */
+    /* ─── Header ─────────────────────────────────────────────── */
     header {
       background: linear-gradient(135deg, #1e3a5f 0%, #1e1b4b 50%, #3b0764 100%);
-      padding: 2.5rem 1.25rem 2rem;
-      text-align: center;
-      border-bottom: 1px solid #334155;
-    }
-    header .subtitle {
-      color: #94a3b8;
-      margin-top: .5rem;
-      font-size: clamp(.85rem, 2.5vw, 1rem);
-    }
-    .badge-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem;
-      justify-content: center;
-      margin-top: 1rem;
-    }
-    .badge {
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.15);
-      border-radius: 99px;
-      padding: .25rem .75rem;
-      font-size: .75rem;
-      color: #cbd5e1;
-    }
-
-    /* ── Layout ─────────────────────────────────────────────── */
-    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-    section { margin-bottom: 2.5rem; }
-
-    /* ── Cards ──────────────────────────────────────────────── */
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 1rem;
-      padding: 1.5rem;
-    }
-    .card + .card { margin-top: 1.25rem; }
-    .card-title {
+      padding: .85rem 1.25rem;
       display: flex;
       align-items: center;
-      gap: .65rem;
-      margin-bottom: 1rem;
-    }
-    .card-title .icon {
-      width: 2rem; height: 2rem;
-      border-radius: .5rem;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1rem;
-      flex-shrink: 0;
-    }
-    .icon-hawk  { background: linear-gradient(135deg,#dc2626,#7f1d1d); }
-    .icon-dove  { background: linear-gradient(135deg,#0284c7,#1e3a5f); }
-    .icon-home  { background: linear-gradient(135deg,#16a34a,#14532d); }
-    .icon-param { background: linear-gradient(135deg,#d97706,#78350f); }
-
-    /* ── Controls ───────────────────────────────────────────── */
-    .controls-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1.25rem;
-    }
-    .param-block label {
-      display: flex;
       justify-content: space-between;
-      font-size: .85rem;
+      flex-wrap: wrap;
+      gap: .4rem;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 { font-size: clamp(.95rem, 3vw, 1.35rem); font-weight: 800; }
+    header .sub { font-size: .72rem; color: #94a3b8; }
+    #header-legend { font-size: .8rem; color: #cbd5e1; }
+
+    /* ─── Simulation type tabs ───────────────────────────────── */
+    .sim-tabs {
+      display: flex;
+      gap: .45rem;
+      padding: .55rem 1rem;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sim-tab {
+      padding: .32rem .85rem;
+      border-radius: 99px;
+      border: 1px solid #475569;
+      background: transparent;
+      color: #94a3b8;
+      font-size: .8rem;
       font-weight: 600;
-      margin-bottom: .4rem;
-      color: #cbd5e1;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
     }
-    .param-block label span {
-      color: #38bdf8;
+    .sim-tab.active { background: #0284c7; border-color: #0284c7; color: #fff; }
+    .sim-tab:not(.active):hover { background: #0f172a; color: #e2e8f0; }
+
+    /* ─── Main app layout ────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 310px;
+      height: calc(100dvh - 104px);
+      min-height: 440px;
+    }
+    @media (max-width: 680px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: min(62vw, 310px) 1fr;
+        height: auto;
+        min-height: unset;
+      }
+    }
+
+    /* ─── 3D canvas panel ────────────────────────────────────── */
+    .canvas-wrap { position: relative; overflow: hidden; background: #0d0d1a; }
+    #three-canvas { display: block; width: 100%; height: 100%; }
+
+    /* HUD overlays */
+    .hud {
+      position: absolute;
+      top: .6rem;
+      background: rgba(15,23,42,.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: .4rem;
+      padding: .28rem .6rem;
+      font-size: .72rem;
+      font-weight: 600;
+      pointer-events: none;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .hud-left  { left:  .6rem; }
+    .hud-right { right: .6rem; text-align: right; }
+
+    /* ─── Side panel ─────────────────────────────────────────── */
+    .side {
+      background: #1e293b;
+      border-left: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      gap: .8rem;
+      padding: .8rem;
+      overflow-y: auto;
+    }
+    @media (max-width: 680px) {
+      .side { border-left: none; border-top: 1px solid #334155; }
+    }
+
+    /* Section label */
+    .slbl {
+      font-size: .65rem;
       font-weight: 700;
-      min-width: 2.5rem;
-      text-align: right;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #475569;
+      padding-bottom: .3rem;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: .1rem;
     }
-    input[type="range"] {
+
+    /* Population count cards */
+    .pop-row { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+    .pop-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: .45rem;
+      padding: .5rem .6rem;
+      text-align: center;
+    }
+    .pop-card .num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+    .pop-card .lbl { font-size: .65rem; color: #64748b; margin-top: .08rem; }
+
+    /* Chart */
+    .chart-box { flex: 1; position: relative; min-height: 120px; }
+
+    /* Controls */
+    .ctrl { display: flex; flex-direction: column; gap: .45rem; }
+
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+    .btn {
+      padding: .46rem;
+      border-radius: .4rem;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn:hover { border-color: #38bdf8; background: #1e3a5f; }
+    .btn.primary { background: #0284c7; border-color: #0284c7; color: #fff; }
+    .btn.primary:hover { background: #0369a1; }
+
+    /* Sliders */
+    .sl-row {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .76rem;
+    }
+    .sl-row label { flex: 0 0 66px; color: #94a3b8; font-size: .73rem; }
+    .sl-row input[type=range] {
+      flex: 1;
       -webkit-appearance: none;
-      width: 100%;
-      height: 6px;
-      border-radius: 3px;
+      height: 4px;
       background: #334155;
+      border-radius: 2px;
       outline: none;
       cursor: pointer;
     }
-    input[type="range"]::-webkit-slider-thumb {
+    .sl-row input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 18px; height: 18px;
+      width: 14px; height: 14px;
       border-radius: 50%;
       background: #38bdf8;
       border: 2px solid #0f172a;
-      cursor: pointer;
     }
-    input[type="range"]::-moz-range-thumb {
-      width: 16px; height: 16px;
+    .sl-row input[type=range]::-moz-range-thumb {
+      width: 12px; height: 12px;
       border-radius: 50%;
       background: #38bdf8;
       border: 2px solid #0f172a;
-      cursor: pointer;
     }
-
-    /* ── Simulation layout ──────────────────────────────────── */
-    .sim-section-title {
-      display: flex; align-items: center; gap: .5rem;
-      margin-bottom: 1rem;
-      padding-bottom: .75rem;
-      border-bottom: 1px solid #334155;
+    .sl-row .val {
+      min-width: 2.2rem;
+      text-align: right;
+      color: #38bdf8;
+      font-weight: 700;
+      font-size: .75rem;
     }
-    .sim-section-title .dot {
-      width: 10px; height: 10px; border-radius: 50%;
-    }
-    .dot-hawk { background: #ef4444; }
-    .dot-dove { background: #38bdf8; }
-    .dot-bourgeois { background: #22c55e; }
-    .dot-intruder  { background: #f97316; }
-
-    .description-box {
-      background: rgba(255,255,255,.03);
-      border-left: 3px solid;
-      border-radius: 0 .5rem .5rem 0;
-      padding: 1rem;
-      margin-bottom: 1.25rem;
-      font-size: .9rem;
-      color: #94a3b8;
-    }
-    .description-box.hawk  { border-color: #ef4444; }
-    .description-box.dove  { border-color: #38bdf8; }
-    .description-box.bourg { border-color: #22c55e; }
-
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.25rem;
-      margin-bottom: 1.25rem;
-    }
-    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
-
-    /* ── Payoff table ───────────────────────────────────────── */
-    .table-wrap { overflow-x: auto; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: .85rem;
-    }
-    th, td {
-      padding: .55rem .75rem;
-      border: 1px solid #334155;
-      text-align: center;
-    }
-    th { background: #0f172a; font-weight: 600; color: #94a3b8; }
-    td.label-cell { font-weight: 600; background: #0f172a; color: #94a3b8; text-align: left; }
-    td.positive { color: #4ade80; }
-    td.negative { color: #f87171; }
-    td.neutral  { color: #fbbf24; }
-
-    /* ── Chart containers ───────────────────────────────────── */
-    .chart-container {
-      position: relative;
-      height: 220px;
-    }
-    .chart-container-wide {
-      position: relative;
-      height: 260px;
-      margin-top: 1.25rem;
-    }
-
-    /* ── ESS badge ──────────────────────────────────────────── */
-    .ess-box {
-      margin-top: 1.25rem;
-      padding: 1rem;
-      border-radius: .75rem;
-      border: 1px solid;
-      font-size: .9rem;
-    }
-    .ess-box.stable   { background: rgba(34,197,94,.08);  border-color: rgba(34,197,94,.35); }
-    .ess-box.mixed    { background: rgba(251,191,36,.08);  border-color: rgba(251,191,36,.35); }
-    .ess-box.unstable { background: rgba(239,68,68,.08);   border-color: rgba(239,68,68,.35); }
-    .ess-box h3 { margin-bottom: .3rem; }
-    .ess-box.stable   h3 { color: #4ade80; }
-    .ess-box.mixed    h3 { color: #fbbf24; }
-    .ess-box.unstable h3 { color: #f87171; }
-
-    /* ── Responsive tweaks ──────────────────────────────────── */
-    @media (max-width: 480px) {
-      .card { padding: 1rem; }
-      main  { padding: 1rem .75rem 2.5rem; }
-    }
-
-    /* ── Scroll-nav tabs ─────────────────────────────────────── */
-    .nav-tabs {
-      display: flex;
-      gap: .5rem;
-      overflow-x: auto;
-      padding-bottom: .5rem;
-      margin-bottom: 1.5rem;
-      -webkit-overflow-scrolling: touch;
-    }
-    .nav-tab {
-      flex-shrink: 0;
-      padding: .45rem 1.1rem;
-      border-radius: 99px;
-      border: 1px solid #334155;
-      background: transparent;
-      color: #94a3b8;
-      font-size: .85rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background .15s, color .15s;
-    }
-    .nav-tab:hover { background: #1e293b; color: #e2e8f0; }
-
-    /* ── Footer ─────────────────────────────────────────────── */
-    footer {
-      text-align: center;
-      padding: 1.5rem 1rem;
-      color: #475569;
-      font-size: .8rem;
-      border-top: 1px solid #1e293b;
-    }
-    footer a { color: #38bdf8; text-decoration: none; }
   </style>
 </head>
+
 <body>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- HEADER                                                     -->
-<!-- ══════════════════════════════════════════════════════════ -->
+<!-- ═══════════ HEADER ═══════════════════════════════════════ -->
 <header>
-  <h1>🧬 The Selfish Gene</h1>
-  <p class="subtitle">Interactive Game Theory Simulations — Hawk vs Dove &amp; Bourgeois vs Intruder</p>
-  <div class="badge-row">
-    <span class="badge">📖 Based on Richard Dawkins' book</span>
-    <span class="badge">🎮 Adjust payoffs in real-time</span>
-    <span class="badge">📱 Mobile-friendly</span>
+  <div>
+    <h1>🧬 The Selfish Gene</h1>
+    <div class="sub">3D Game Theory Simulation · based on Richard Dawkins' book</div>
   </div>
+  <div id="header-legend">🦅 Hawk &nbsp; 🕊️ Dove</div>
 </header>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- MAIN                                                        -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<main>
+<!-- ═══════════ SIM TABS ═════════════════════════════════════ -->
+<div class="sim-tabs">
+  <button class="sim-tab active" data-sim="hd">🦅🕊️ Hawk vs Dove</button>
+  <button class="sim-tab"        data-sim="bi">🏠⚔️ Bourgeois vs Intruder</button>
+</div>
 
-  <!-- Quick nav -->
-  <nav>
-    <div class="nav-tabs">
-      <a class="nav-tab" href="#controls">⚙️ Payoff Settings</a>
-      <a class="nav-tab" href="#hawk-dove">🦅🕊️ Hawk vs Dove</a>
-      <a class="nav-tab" href="#bourgeois">🏠⚔️ Bourgeois vs Intruder</a>
-    </div>
-  </nav>
+<!-- ═══════════ APP ══════════════════════════════════════════ -->
+<div class="app">
 
-  <!-- ── PAYOFF CONTROLS ─────────────────────────────────────── -->
-  <section id="controls">
-    <div class="card">
-      <div class="card-title">
-        <div class="icon icon-param">⚙️</div>
-        <h2>Payoff Settings</h2>
-      </div>
-      <p style="font-size:.9rem;color:#94a3b8;margin-bottom:1.25rem;">
-        Drag the sliders to adjust the reward and cost values used in every simulation below. All charts update instantly.
-      </p>
-      <div class="controls-grid">
-        <div class="param-block">
-          <label>🏆 Win (resource value) <span id="val-win">4</span></label>
-          <input id="sl-win" type="range" min="1" max="20" step="1" value="4" />
+  <!-- LEFT: 3D canvas -->
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div class="hud hud-left"  id="hud-phase">🌅 Fight Phase</div>
+    <div class="hud hud-right" id="hud-round">Round 0</div>
+  </div>
+
+  <!-- RIGHT: side panel -->
+  <div class="side">
+
+    <!-- Live counts -->
+    <div>
+      <div class="slbl">Live Population</div>
+      <div class="pop-row">
+        <div class="pop-card">
+          <div class="num" id="cnt-a" style="color:#ef4444">—</div>
+          <div class="lbl" id="lbl-a">🦅 Hawks</div>
         </div>
-        <div class="param-block">
-          <label>🤝 Draw (share value) <span id="val-draw">2</span></label>
-          <input id="sl-draw" type="range" min="0" max="15" step="1" value="2" />
-        </div>
-        <div class="param-block">
-          <label>😔 Loss (retreat cost) <span id="val-loss">0</span></label>
-          <input id="sl-loss" type="range" min="-5" max="5" step="1" value="0" />
-        </div>
-        <div class="param-block">
-          <label>🤕 Injury (fight cost) <span id="val-injury">-2</span></label>
-          <input id="sl-injury" type="range" min="-20" max="0" step="1" value="-2" />
+        <div class="pop-card">
+          <div class="num" id="cnt-b" style="color:#38bdf8">—</div>
+          <div class="lbl" id="lbl-b">🕊️ Doves</div>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- ── HAWK VS DOVE ────────────────────────────────────────── -->
-  <section id="hawk-dove">
-    <div class="card">
-      <div class="sim-section-title">
-        <span class="dot dot-hawk"></span>
-        <h2>Hawk vs Dove Simulation</h2>
-        <span class="dot dot-dove"></span>
+    <!-- Population chart -->
+    <div>
+      <div class="slbl">Population Over Time</div>
+      <div class="chart-box"><canvas id="pop-chart"></canvas></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="ctrl">
+      <div class="slbl">Controls</div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-play">▶ Play</button>
+        <button class="btn"         id="btn-reset">↺ Reset</button>
       </div>
 
-      <div class="description-box hawk">
-        <strong>🦅 Hawk</strong> — always fights aggressively for a resource. If it meets another Hawk, they battle until one is injured.
-        <br/><br/>
-        <strong>🕊️ Dove</strong> — displays peacefully and retreats rather than risk injury. Against a Hawk it always backs down; against another Dove they share.
+      <div class="sl-row">
+        <label>⚡ Speed</label>
+        <input type="range" id="sl-speed" min="1" max="6" step="1" value="2" />
+        <span class="val" id="val-speed">2×</span>
       </div>
 
-      <div class="two-col">
-        <!-- Payoff matrix -->
-        <div>
-          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Payoff Matrix (per player)</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>vs →</th>
-                  <th>🦅 Hawk</th>
-                  <th>🕊️ Dove</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="label-cell">🦅 Hawk</td>
-                  <td id="hd-hh">—</td>
-                  <td id="hd-hd">—</td>
-                </tr>
-                <tr>
-                  <td class="label-cell">🕊️ Dove</td>
-                  <td id="hd-dh">—</td>
-                  <td id="hd-dd">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p style="font-size:.75rem;color:#475569;margin-top:.5rem;">Each cell shows the payoff for the <em>row</em> player.</p>
-        </div>
-
-        <!-- Bar chart -->
-        <div>
-          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Matchup Payoffs</h3>
-          <div class="chart-container">
-            <canvas id="chart-hd-bar"></canvas>
-          </div>
-        </div>
+      <div class="slbl" style="margin-top:.2rem">Starting Population</div>
+      <div class="sl-row">
+        <label id="lbl-sl-a">🦅 Hawks</label>
+        <input type="range" id="sl-init-a" min="2" max="14" step="1" value="8" />
+        <span class="val" id="val-init-a">8</span>
+      </div>
+      <div class="sl-row">
+        <label id="lbl-sl-b">🕊️ Doves</label>
+        <input type="range" id="sl-init-b" min="2" max="14" step="1" value="8" />
+        <span class="val" id="val-init-b">8</span>
       </div>
 
-      <!-- Population dynamics chart -->
-      <h3 style="margin-bottom:.5rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Population Dynamics — Average Payoff vs % Hawks in Population</h3>
-      <p style="font-size:.85rem;color:#64748b;margin-bottom:.75rem;">
-        Shows how much each strategy earns on average as the proportion of Hawks in the population changes. Where the lines <strong>cross</strong> is the mixed Evolutionarily Stable Strategy (ESS).
-      </p>
-      <div class="chart-container-wide">
-        <canvas id="chart-hd-pop"></canvas>
+      <div class="slbl" style="margin-top:.2rem">Payoff Values</div>
+      <div class="sl-row">
+        <label>🏆 Win</label>
+        <input type="range" id="sl-win"    min="1" max="10" step="1" value="4" />
+        <span class="val"  id="val-win">4</span>
       </div>
-
-      <!-- ESS analysis -->
-      <div id="hd-ess-box" class="ess-box stable">
-        <h3 id="hd-ess-title">Calculating…</h3>
-        <p  id="hd-ess-desc"></p>
+      <div class="sl-row">
+        <label>🤝 Draw</label>
+        <input type="range" id="sl-draw"   min="0" max="8"  step="1" value="2" />
+        <span class="val"  id="val-draw">2</span>
+      </div>
+      <div class="sl-row">
+        <label>😔 Loss</label>
+        <input type="range" id="sl-loss"   min="-4" max="2" step="1" value="0" />
+        <span class="val"  id="val-loss">0</span>
+      </div>
+      <div class="sl-row">
+        <label>🤕 Injury</label>
+        <input type="range" id="sl-injury" min="-10" max="-1" step="1" value="-2" />
+        <span class="val"  id="val-injury">-2</span>
       </div>
     </div>
-  </section>
 
-  <!-- ── BOURGEOIS VS INTRUDER ───────────────────────────────── -->
-  <section id="bourgeois">
-    <div class="card">
-      <div class="sim-section-title">
-        <span class="dot dot-bourgeois"></span>
-        <h2>Bourgeois vs Intruder Simulation</h2>
-        <span class="dot dot-intruder"></span>
-      </div>
+  </div><!-- /side -->
+</div><!-- /app -->
 
-      <div class="description-box bourg">
-        <strong>🏠 Bourgeois</strong> — plays <em>"owner wins"</em>: fights like a Hawk when at home, retreats like a Dove when intruding elsewhere.
-        <br/><br/>
-        <strong>⚔️ Intruder</strong> — always attacks, regardless of ownership. Equivalent to a pure Hawk that ignores ownership conventions.
-        <br/><br/>
-        💡 <em>Bourgeois wins because both sides agree on the ownership rule — no costly injuries ever happen!</em>
-      </div>
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT  (ES module — can use import/from)
+     ═══════════════════════════════════════════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-      <div class="two-col">
-        <!-- Payoff matrix -->
-        <div>
-          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Payoff Matrix (per player)</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>vs →</th>
-                  <th>🏠 Bourgeois</th>
-                  <th>⚔️ Intruder</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="label-cell">🏠 Bourgeois</td>
-                  <td id="bi-bb">—</td>
-                  <td id="bi-bi">—</td>
-                </tr>
-                <tr>
-                  <td class="label-cell">⚔️ Intruder</td>
-                  <td id="bi-ib">—</td>
-                  <td id="bi-ii">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p style="font-size:.75rem;color:#475569;margin-top:.5rem;">Each cell shows the payoff for the <em>row</em> player.</p>
-        </div>
-
-        <!-- Bar chart -->
-        <div>
-          <h3 style="margin-bottom:.75rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Matchup Payoffs</h3>
-          <div class="chart-container">
-            <canvas id="chart-bi-bar"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Population dynamics chart -->
-      <h3 style="margin-bottom:.5rem;color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;">Population Dynamics — Average Payoff vs % Intruders in Population</h3>
-      <p style="font-size:.85rem;color:#64748b;margin-bottom:.75rem;">
-        Shows each strategy's average payoff as the proportion of Intruders rises. If Bourgeois stays <strong>above</strong> Intruder at every point, it is the dominant ESS.
-      </p>
-      <div class="chart-container-wide">
-        <canvas id="chart-bi-pop"></canvas>
-      </div>
-
-      <!-- ESS analysis -->
-      <div id="bi-ess-box" class="ess-box stable">
-        <h3 id="bi-ess-title">Calculating…</h3>
-        <p  id="bi-ess-desc"></p>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<footer>
-  <p>
-    Built to explore <em>The Selfish Gene</em> (1976) by Richard Dawkins ·
-    <a href="https://github.com/samarthpatel1289/selfish-gene-simulation" target="_blank" rel="noopener">View source on GitHub</a>
-  </p>
-</footer>
-
-<!-- ══════════════════════════════════════════════════════════ -->
-<!-- JAVASCRIPT                                                  -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<script>
-"use strict";
-
-// ── Simulation logic (mirrors simulations.py) ──────────────────
+/* ═══════════════════════════════════════════════════════════════
+   STRATEGY CLASSES  (mirrors the Python structure in the repo)
+   ═══════════════════════════════════════════════════════════════ */
 
 class Payoff {
   constructor(win = 4, loss = 0, draw = 2, injury = -2) {
-    this.win    = win;
-    this.loss   = loss;
-    this.draw   = draw;
-    this.injury = injury;
+    this.win = win; this.loss = loss;
+    this.draw = draw; this.injury = injury;
   }
 }
 
-class HawkVsDoveSimulation {
-  constructor(payoff) {
-    this.payoff = payoff || new Payoff();
-  }
-
-  /** When two Hawks fight: one wins, one is injured (expected value per player) */
-  hawkVsHawk() {
-    return (this.payoff.win + this.payoff.injury) / 2;
-  }
-
-  /** Hawk meets Dove: Hawk wins, Dove retreats without fight */
-  hawkVsDove() {
-    return { hawk: this.payoff.win, dove: this.payoff.loss };
-  }
-
-  /** Dove meets Hawk: Dove retreats (same as above from Dove's perspective) */
-  doveVsHawk() {
-    return { dove: this.payoff.loss, hawk: this.payoff.win };
-  }
-
-  /** Two Doves share the resource equally */
-  doveVsDove() {
-    return this.payoff.draw;
-  }
-
-  /**
-   * Expected payoff for Hawk in a population where proportion p are Hawks.
-   * E(Hawk) = p * E(H,H) + (1-p) * E(H,D)
-   */
-  expectedHawk(p) {
-    return p * this.hawkVsHawk() + (1 - p) * this.hawkVsDove().hawk;
-  }
-
-  /**
-   * Expected payoff for Dove in a population where proportion p are Hawks.
-   * E(Dove) = p * E(D,H) + (1-p) * E(D,D)
-   */
-  expectedDove(p) {
-    return p * this.doveVsHawk().dove + (1 - p) * this.doveVsDove();
-  }
-
-  /**
-   * Find the mixed ESS equilibrium (proportion of Hawks p* where E(H)=E(D)).
-   * Returns a number in [0,1] or null if corner solution (pure strategy dominates).
-   */
-  essProportionHawks() {
-    // E(H) = E(D) => p*(H,H) + (1-p)*(H,D) = p*(D,H) + (1-p)*(D,D)
-    // p*(H,H - H,D - D,H + D,D) = D,D - H,D
-    const a = this.hawkVsHawk();
-    const b = this.hawkVsDove().hawk;
-    const c = this.doveVsHawk().dove;
-    const d = this.doveVsDove();
-    const denom = a - b - c + d;
-    if (Math.abs(denom) < 1e-9) return null; // Parallel lines
-    const p = (d - b) / denom;
-    if (p < 0) return 0;
-    if (p > 1) return 1;
-    return p;
-  }
-
-  run() {
-    return {
-      "Hawk vs Hawk (each)":  this.hawkVsHawk(),
-      "Hawk vs Dove (Hawk)":  this.hawkVsDove().hawk,
-      "Hawk vs Dove (Dove)":  this.hawkVsDove().dove,
-      "Dove vs Dove (each)":  this.doveVsDove(),
-    };
+class Hawk {
+  static emoji    = '🦅';
+  static label    = 'Hawks';
+  static cssColor = '#ef4444';
+  static hexColor = 0xef4444;
+  is_hawk = true; is_dove = false; is_bourgeois = false; is_intruder = false;
+  compete(other, payoff) {
+    if (other.is_dove) return payoff.win;
+    return (payoff.win + payoff.injury) / 2; // Hawk vs Hawk: risky fight
   }
 }
 
-class BourgeoisVsIntruderSimulation {
-  constructor(payoff) {
-    this.payoff = payoff || new Payoff();
-  }
-
-  /**
-   * Bourgeois vs Bourgeois: Each time they meet, one is the owner (wins) and
-   * one is the visitor (retreats). Average = (win + loss) / 2.
-   */
-  bourgeoisVsBourgeois() {
-    return (this.payoff.win + this.payoff.loss) / 2;
-  }
-
-  /**
-   * Bourgeois vs Intruder: Bourgeois is at home → defends and wins.
-   * (No costly fight because Intruder still loses to determined defender.)
-   */
-  bourgeoisVsIntruderAtHome() {
-    return { bourgeois: this.payoff.win, intruder: this.payoff.loss };
-  }
-
-  /**
-   * Bourgeois away (intruding) vs Intruder at that location → Bourgeois retreats.
-   */
-  bourgeoisVsIntruderAway() {
-    return { bourgeois: this.payoff.loss, intruder: this.payoff.win };
-  }
-
-  /**
-   * Bourgeois average vs Intruder: 50% chance at home, 50% away.
-   */
-  bourgeoisVsIntruderAvg() {
-    return (this.payoff.win + this.payoff.loss) / 2;
-  }
-
-  /**
-   * Intruder vs Intruder: Both fight like Hawks — costly battle.
-   */
-  intruderVsIntruder() {
-    return (this.payoff.win + this.payoff.injury) / 2;
-  }
-
-  /**
-   * Expected payoff for Bourgeois in a population where proportion q are Intruders.
-   * E(B) = (1-q) * B_vs_B + q * B_vs_I_avg
-   */
-  expectedBourgeois(q) {
-    return (1 - q) * this.bourgeoisVsBourgeois() + q * this.bourgeoisVsIntruderAvg();
-  }
-
-  /**
-   * Expected payoff for Intruder in a population where proportion q are Intruders.
-   * E(I) = (1-q) * I_vs_B + q * I_vs_I
-   */
-  expectedIntruder(q) {
-    // Against a Bourgeois: 50% Bourgeois is at home (I loses), 50% away (I wins)
-    const iVsB = (this.payoff.win + this.payoff.loss) / 2;
-    return (1 - q) * iVsB + q * this.intruderVsIntruder();
-  }
-
-  run() {
-    return {
-      "Bourgeois vs Bourgeois":          this.bourgeoisVsBourgeois(),
-      "Bourgeois at home vs Intruder":   this.bourgeoisVsIntruderAtHome().bourgeois,
-      "Intruder vs Bourgeois at home":   this.bourgeoisVsIntruderAtHome().intruder,
-      "Bourgeois away vs Intruder":      this.bourgeoisVsIntruderAway().bourgeois,
-      "Intruder vs Bourgeois away":      this.bourgeoisVsIntruderAway().intruder,
-      "Intruder vs Intruder":            this.intruderVsIntruder(),
-    };
+class Dove {
+  static emoji    = '🕊️';
+  static label    = 'Doves';
+  static cssColor = '#38bdf8';
+  static hexColor = 0x38bdf8;
+  is_hawk = false; is_dove = true; is_bourgeois = false; is_intruder = false;
+  compete(other, payoff) {
+    if (other.is_hawk) return payoff.loss;  // retreats from Hawk
+    return payoff.draw;                     // shares with Dove
   }
 }
 
-// ── Chart helpers ──────────────────────────────────────────────
-
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      labels: { color: "#94a3b8", font: { size: 12 } }
-    },
-    tooltip: {
-      callbacks: {
-        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}`
-      }
-    }
-  },
-  scales: {
-    x: {
-      ticks: { color: "#64748b", font: { size: 11 } },
-      grid:  { color: "#1e293b" }
-    },
-    y: {
-      ticks: { color: "#64748b", font: { size: 11 } },
-      grid:  { color: "#334155" }
-    }
+class Bourgeois {
+  static emoji    = '🏠';
+  static label    = 'Bourgeois';
+  static cssColor = '#22c55e';
+  static hexColor = 0x22c55e;
+  is_hawk = false; is_dove = false; is_bourgeois = true; is_intruder = false;
+  compete(other, payoff, isAtHome = true) {
+    return isAtHome ? payoff.win : payoff.loss; // owner wins, visitor retreats
   }
+}
+
+class Intruder {
+  static emoji    = '⚔️';
+  static label    = 'Intruders';
+  static cssColor = '#f97316';
+  static hexColor = 0xf97316;
+  is_hawk = false; is_dove = false; is_bourgeois = false; is_intruder = true;
+  compete(other, payoff) {
+    if (other.is_bourgeois) return payoff.loss; // Bourgeois home-defender wins
+    return (payoff.win + payoff.injury) / 2;    // Intruder vs Intruder: costly fight
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THREE.JS SCENE SETUP
+   ═══════════════════════════════════════════════════════════════ */
+
+const wrap     = document.getElementById('canvas-wrap');
+const canvas3d = document.getElementById('three-canvas');
+
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+camera.position.set(0, 16, 11);
+camera.lookAt(0, 0, 0);
+
+const orbitCtrl = new OrbitControls(camera, renderer.domElement);
+orbitCtrl.enableDamping = true;
+orbitCtrl.dampingFactor = 0.06;
+orbitCtrl.minDistance   = 6;
+orbitCtrl.maxDistance   = 35;
+orbitCtrl.maxPolarAngle = Math.PI / 2.05;
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.3);
+sun.position.set(8, 14, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(512, 512);
+scene.add(sun);
+
+// Ground plane
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(20, 20),
+  new THREE.MeshLambertMaterial({ color: 0x2d5a27 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Ground grid — gives depth cues
+const grid = new THREE.GridHelper(20, 20, 0x1a4a22, 0x1a4a22);
+grid.position.y = 0.02;
+scene.add(grid);
+
+// Mate zone — glowing green circle in the center
+const mateZoneMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(2.0, 32),
+  new THREE.MeshLambertMaterial({ color: 0x14532d, transparent: true, opacity: 0.85 })
+);
+mateZoneMesh.rotation.x = -Math.PI / 2;
+mateZoneMesh.position.y = 0.03;
+scene.add(mateZoneMesh);
+
+// Mate zone border ring
+const mateRing = new THREE.Mesh(
+  new THREE.RingGeometry(2.0, 2.2, 32),
+  new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+);
+mateRing.rotation.x = -Math.PI / 2;
+mateRing.position.y = 0.04;
+scene.add(mateRing);
+
+// Territories — arranged in a ring (fewer than max agents → always contested)
+const NUM_TERRITORIES = 5;
+const TERRITORY_RING_R = 5.8;
+const territories = [];
+
+for (let i = 0; i < NUM_TERRITORIES; i++) {
+  const angle = (i / NUM_TERRITORIES) * Math.PI * 2 - Math.PI / 2;
+  const tx = Math.cos(angle) * TERRITORY_RING_R;
+  const tz = Math.sin(angle) * TERRITORY_RING_R;
+
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.65, 0.65, 0.08, 16),
+    new THREE.MeshLambertMaterial({ color: 0x78350f })
+  );
+  disc.position.set(tx, 0.04, tz);
+  scene.add(disc);
+
+  territories.push({ disc, x: tx, z: tz, ownerIdx: -1 });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EMOJI SPRITE FACTORY
+   ═══════════════════════════════════════════════════════════════ */
+
+const _texCache = {};
+function emojiTexture(emoji) {
+  if (_texCache[emoji]) return _texCache[emoji];
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = '96px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 64, 68);
+  const t = new THREE.CanvasTexture(c);
+  _texCache[emoji] = t;
+  return t;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AGENT CLASS  — one living creature in the 3D world
+   ═══════════════════════════════════════════════════════════════ */
+
+class Agent {
+  constructor(StrategyClass) {
+    this.Class    = StrategyClass;
+    this.strategy = new StrategyClass();
+    this.energy   = 2;      // resource energy accumulated
+    this.age      = 0;      // rounds survived
+    this.alive    = true;
+    this.homeIdx  = -1;     // territory index (Bourgeois only)
+
+    // 3D sprite
+    const mat  = new THREE.SpriteMaterial({ map: emojiTexture(StrategyClass.emoji), transparent: true });
+    this.sprite = new THREE.Sprite(mat);
+    this.sprite.scale.set(1.5, 1.5, 1);
+
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 2.5;
+    this.sprite.position.set(Math.cos(a) * r, 0.9, Math.sin(a) * r);
+    this._target = this.sprite.position.clone();
+
+    scene.add(this.sprite);
+  }
+
+  /* Smooth movement — call every frame */
+  update(dt) {
+    const p = this.sprite.position;
+    const lerpSpeed = 3.5 * dt;
+    p.x += (this._target.x - p.x) * lerpSpeed;
+    p.z += (this._target.z - p.z) * lerpSpeed;
+  }
+
+  moveTo(x, z) { this._target.set(x, 0.9, z); }
+
+  wander(radius = 4.5) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * radius + 0.5;
+    this.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+
+  /* Scale pulse — visual feedback for fight outcome */
+  pulse(upScale = 1.8, ms = 300) {
+    this.sprite.scale.set(upScale, upScale, 1);
+    setTimeout(() => { if (this.alive) this.sprite.scale.set(1.5, 1.5, 1); }, ms);
+  }
+
+  dispose() {
+    scene.remove(this.sprite);
+    this.sprite.material.dispose();
+    this.alive = false;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIMULATION STATE
+   ═══════════════════════════════════════════════════════════════ */
+
+let payoff   = new Payoff();
+let agents   = [];
+let simType  = 'hd';   // 'hd' (Hawk/Dove) or 'bi' (Bourgeois/Intruder)
+let round    = 0;
+let running  = false;
+let simSpeed = 2;
+
+// Phase cycle: fight → roam → mate → cull → (back to fight)
+const PHASES    = ['fight', 'roam', 'mate', 'cull'];
+const PHASE_DUR = { fight: 2.2, roam: 0.9, mate: 2.0, cull: 0.6 };
+const PHASE_HUD = {
+  fight: '🌅 Fight Phase — territories are contested',
+  roam:  '☀️  Roaming',
+  mate:  '🌇 Mate Phase — offspring are born',
+  cull:  '🌙 Night — weak agents die',
+};
+const PHASE_SKY = {
+  fight: new THREE.Color(0x5c2020),
+  roam:  new THREE.Color(0x0f2a4a),
+  mate:  new THREE.Color(0x2b1147),
+  cull:  new THREE.Color(0x060611),
 };
 
-function makeBarChart(id, labels, datasets) {
-  return new Chart(document.getElementById(id), {
-    type: "bar",
-    data: { labels, datasets },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        ...CHART_DEFAULTS.plugins,
-        legend: { display: false }
-      },
-      scales: {
-        ...CHART_DEFAULTS.scales,
-        y: {
-          ...CHART_DEFAULTS.scales.y,
-          beginAtZero: false
-        }
-      }
+let phase      = 'fight';
+let phaseTimer = 0;
+
+// History for chart (last 60 rounds)
+const HIST_LEN = 60;
+const histA = [], histB = [];
+
+/* ─── init / reset ──────────────────────────────────────────── */
+
+function initAgents(countA, countB) {
+  agents.forEach(a => a.dispose());
+  agents = [];
+
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+
+  for (let i = 0; i < countA; i++) agents.push(new Agent(ClassA));
+  for (let i = 0; i < countB; i++) agents.push(new Agent(ClassB));
+
+  round = 0; phase = 'fight'; phaseTimer = 0;
+  histA.length = 0; histB.length = 0;
+
+  territories.forEach(t => {
+    t.ownerIdx = -1;
+    t.disc.material.color.setHex(0x78350f);
+  });
+
+  if (simType === 'bi') _assignBourgeoisHomes();
+  _refreshUI();
+  _refreshChart();
+}
+
+function _assignBourgeoisHomes() {
+  const bAgents = agents.filter(a => a.strategy.is_bourgeois);
+  territories.forEach((t, i) => {
+    if (i < bAgents.length) {
+      bAgents[i].homeIdx = i;
+      t.ownerIdx = i;
+      t.disc.material.color.setHex(0x15803d); // green = owned
     }
   });
 }
 
-function makeLineChart(id, datasets) {
-  const labels = Array.from({ length: 101 }, (_, i) => (i / 100).toFixed(2));
-  return new Chart(document.getElementById(id), {
-    type: "line",
-    data: { labels, datasets },
-    options: {
-      ...CHART_DEFAULTS,
-      elements: {
-        point: { radius: 0 },
-        line:  { borderWidth: 2.5, tension: 0 }
-      },
-      scales: {
-        ...CHART_DEFAULTS.scales,
-        x: {
-          ...CHART_DEFAULTS.scales.x,
-          ticks: {
-            color: "#64748b",
-            font: { size: 10 },
-            maxTicksLimit: 11,
-            callback: (val, idx) => idx % 10 === 0 ? `${idx}%` : ""
-          }
+/* ─── Fight Phase ───────────────────────────────────────────── */
+
+function runFightPhase() {
+  // Reset territory colours
+  territories.forEach(t => t.disc.material.color.setHex(0x78350f));
+
+  // Shuffle agents
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+
+  // Assign each agent to a territory (more agents than territories → contests)
+  const tBuckets = territories.map(() => []);
+  shuffled.forEach((agent, i) => {
+    const tIdx = i % territories.length;
+    tBuckets[tIdx].push(agent);
+    const t = territories[tIdx];
+    const jx = (Math.random() - 0.5) * 0.7;
+    const jz = (Math.random() - 0.5) * 0.7;
+    agent.moveTo(t.x + jx, t.z + jz);
+  });
+
+  // Resolve each territory
+  tBuckets.forEach((bucket, tIdx) => {
+    if (bucket.length === 0) return;
+
+    if (bucket.length === 1) {
+      // Uncontested — sole agent earns the resource
+      bucket[0].energy += payoff.win;
+      territories[tIdx].disc.material.color.setHex(0xfbbf24); // gold
+      bucket[0].pulse(2.0);
+    } else {
+      territories[tIdx].disc.material.color.setHex(0xef4444); // red = contested
+      // Pair up agents and fight
+      for (let k = 0; k + 1 < bucket.length; k += 2) {
+        const a = bucket[k], b = bucket[k + 1];
+        let gainA, gainB;
+
+        if (simType === 'bi') {
+          const aHome = a.homeIdx === tIdx;
+          const bHome = b.homeIdx === tIdx;
+          gainA = a.strategy.compete(b.strategy, payoff, aHome);
+          gainB = b.strategy.compete(a.strategy, payoff, bHome);
+        } else {
+          gainA = a.strategy.compete(b.strategy, payoff);
+          gainB = b.strategy.compete(a.strategy, payoff);
         }
+
+        a.energy += gainA;
+        b.energy += gainB;
+        // Visual pulse: winner grows, loser shrinks briefly
+        if (gainA > gainB) { a.pulse(2.2); b.pulse(0.7, 250); }
+        else if (gainB > gainA) { b.pulse(2.2); a.pulse(0.7, 250); }
+        else { a.pulse(1.6); b.pulse(1.6); }
       }
+      // Odd agent out at contested territory gets nothing
     }
   });
 }
 
-// ── Cell coloring ──────────────────────────────────────────────
+/* ─── Mate Phase ────────────────────────────────────────────── */
 
-function colorClass(v) {
-  if (v > 0) return "positive";
-  if (v < 0) return "negative";
-  return "neutral";
-}
+const MATE_THRESHOLD = 3;
+const MAX_POPULATION = 28;
 
-function setCell(id, value) {
-  const el = document.getElementById(id);
-  el.textContent = value.toFixed(2);
-  el.className = colorClass(value);
-}
+function runMatePhase() {
+  const eligible = agents.filter(a => a.energy >= MATE_THRESHOLD);
 
-// ── ESS analysis text ──────────────────────────────────────────
+  // Move eligible agents to mate zone (center)
+  eligible.forEach(a => {
+    const angle = Math.random() * Math.PI * 2;
+    a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
+  });
 
-function updateHdEss(sim) {
-  const p = sim.essProportionHawks();
-  const box   = document.getElementById("hd-ess-box");
-  const title = document.getElementById("hd-ess-title");
-  const desc  = document.getElementById("hd-ess-desc");
-
-  const a = sim.hawkVsHawk();
-  const b = sim.hawkVsDove().hawk;
-  const c = sim.doveVsHawk().dove;
-  const d = sim.doveVsDove();
-
-  if (p === 1) {
-    box.className = "ess-box unstable";
-    title.textContent = "⚔️ Pure Hawk ESS";
-    desc.textContent =
-      "With these payoffs, Hawks always outperform Doves. The population converges to 100% Hawks — " +
-      "but everyone suffers because of constant costly fights.";
-  } else if (p === 0) {
-    box.className = "ess-box stable";
-    title.textContent = "🕊️ Pure Dove ESS";
-    desc.textContent =
-      "With these payoffs, Doves always outperform Hawks. The population converges to 100% Doves — " +
-      "peaceful sharing dominates because fights are too costly.";
-  } else {
-    const pct = (p * 100).toFixed(1);
-    box.className = "ess-box mixed";
-    title.textContent = `🔀 Mixed ESS — ${pct}% Hawks, ${(100 - p * 100).toFixed(1)}% Doves`;
-    desc.textContent =
-      `At this payoff balance, neither strategy can invade the other. ` +
-      `If Hawks exceed ${pct}%, Doves earn more (Hawks start injuring each other too often). ` +
-      `If Hawks drop below ${pct}%, Hawks earn more (easy pickings against all Doves). ` +
-      `The population stabilises at this mix.`;
+  // Produce one offspring per two eligible parents
+  const newborns = [];
+  for (let i = 0; i + 1 < eligible.length; i += 2) {
+    if (agents.length + newborns.length >= MAX_POPULATION) break;
+    const parent = eligible[i];
+    const child  = new Agent(parent.Class);
+    child.energy = 1;
+    // Spawn near parent
+    child.sprite.position.copy(parent.sprite.position);
+    child._target.copy(parent.sprite.position);
+    child.pulse(2.5, 400);
+    newborns.push(child);
   }
+  agents.push(...newborns);
+
+  // Send everyone else to wander
+  agents.filter(a => !eligible.includes(a)).forEach(a => a.wander());
 }
 
-function updateBiEss(sim) {
-  const box   = document.getElementById("bi-ess-box");
-  const title = document.getElementById("bi-ess-title");
-  const desc  = document.getElementById("bi-ess-desc");
+/* ─── Cull Phase ────────────────────────────────────────────── */
 
-  // Check if Bourgeois is dominant at all q in [0,1]
-  const eB0 = sim.expectedBourgeois(0);
-  const eI0 = sim.expectedIntruder(0);
-  const eB1 = sim.expectedBourgeois(1);
-  const eI1 = sim.expectedIntruder(1);
+function runCullPhase() {
+  const dead = [];
+  agents.forEach(a => {
+    a.age++;
+    const tooWeak = a.energy < -4;
+    const oldAge  = a.age > 9 && Math.random() < 0.3;
+    if (tooWeak || oldAge) dead.push(a);
+  });
 
-  if (eB0 >= eI0 && eB1 >= eI1) {
-    box.className = "ess-box stable";
-    title.textContent = "🏠 Bourgeois is the ESS — Ownership Convention Wins!";
-    desc.textContent =
-      "Bourgeois outperforms Intruder at every population mix. " +
-      "By respecting the 'owner wins' rule, conflicts are resolved without costly injuries. " +
-      "Intruders can never invade a Bourgeois population because they suffer from unnecessary battles.";
-  } else if (eI0 > eB0 && eI1 > eB1) {
-    box.className = "ess-box unstable";
-    title.textContent = "⚔️ Intruder dominates";
-    desc.textContent =
-      "With these payoffs, aggressive Intruders outperform Bourgeois at every population ratio. " +
-      "Try increasing the Injury cost to see the Bourgeois strategy emerge as the stable equilibrium.";
-  } else {
-    box.className = "ess-box mixed";
-    title.textContent = "🔀 Mixed Equilibrium";
-    desc.textContent =
-      "With these payoffs the strategies are similarly matched — neither fully dominates. " +
-      "Adjust the Injury slider to shift the balance toward the Bourgeois (ownership) ESS.";
+  // If over population cap, remove the weakest excess agents
+  if (agents.length - dead.length > MAX_POPULATION) {
+    const alive = agents.filter(a => !dead.includes(a));
+    alive.sort((a, b) => a.energy - b.energy);
+    const excess = alive.length - MAX_POPULATION;
+    for (let i = 0; i < excess; i++) dead.push(alive[i]);
   }
+
+  dead.forEach(a => { a.dispose(); agents = agents.filter(x => x !== a); });
+
+  // After culling, scatter everyone
+  agents.forEach(a => a.wander(5));
 }
 
-// ── Main update function ───────────────────────────────────────
+/* ─── Advance one phase ─────────────────────────────────────── */
 
-let hdBarChart, hdPopChart, biBarChart, biPopChart;
+function advancePhase() {
+  if      (phase === 'fight') { runFightPhase(); phase = 'roam'; agents.forEach(a => a.wander()); }
+  else if (phase === 'roam')  { phase = 'mate';  runMatePhase(); }
+  else if (phase === 'mate')  { phase = 'cull'; }
+  else {
+    runCullPhase();
+    round++;
+    _recordHistory();
+    _refreshChart();
+    phase = 'fight';
+  }
 
-function buildCharts(hdSim, biSim) {
-  const pRange = Array.from({ length: 101 }, (_, i) => i / 100);
+  phaseTimer = 0;
+  _refreshUI();
+  scene.background.set(PHASE_SKY[phase]);
+}
 
-  // ── Hawk vs Dove bar chart ──
-  const hdResults = hdSim.run();
-  hdBarChart = makeBarChart(
-    "chart-hd-bar",
-    ["H vs H", "H vs D (H)", "D vs H (D)", "D vs D"],
-    [{
-      label: "Payoff",
-      data: Object.values(hdResults),
-      backgroundColor: [
-        "rgba(239,68,68,.75)",
-        "rgba(239,68,68,.75)",
-        "rgba(56,189,248,.75)",
-        "rgba(56,189,248,.75)"
-      ],
-      borderColor: [
-        "#ef4444", "#ef4444", "#38bdf8", "#38bdf8"
-      ],
-      borderWidth: 1.5,
-      borderRadius: 5,
-    }]
-  );
+/* ─── History & chart ───────────────────────────────────────── */
 
-  // ── Hawk vs Dove population dynamics ──
-  hdPopChart = makeLineChart("chart-hd-pop", [
-    {
-      label: "🦅 Hawk avg payoff",
-      data: pRange.map(p => hdSim.expectedHawk(p)),
-      borderColor: "#ef4444",
-      backgroundColor: "rgba(239,68,68,.08)"
-    },
-    {
-      label: "🕊️ Dove avg payoff",
-      data: pRange.map(p => hdSim.expectedDove(p)),
-      borderColor: "#38bdf8",
-      backgroundColor: "rgba(56,189,248,.08)"
+function _recordHistory() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  histA.push(agents.filter(a => a.strategy instanceof ClassA).length);
+  histB.push(agents.filter(a => a.strategy instanceof ClassB).length);
+  if (histA.length > HIST_LEN) { histA.shift(); histB.shift(); }
+}
+
+const popChart = new Chart(document.getElementById('pop-chart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: '🦅 Hawks',   data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.12)',
+        borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
+      { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
+        borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 10 } } },
+    scales: {
+      x: { display: false },
+      y: { beginAtZero: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
     }
-  ]);
-
-  // ── Bourgeois vs Intruder bar chart ──
-  const biResults = biSim.run();
-  biBarChart = makeBarChart(
-    "chart-bi-bar",
-    ["B vs B", "B@home vs I", "I vs B@home", "I vs I"],
-    [{
-      label: "Payoff",
-      data: [
-        biResults["Bourgeois vs Bourgeois"],
-        biResults["Bourgeois at home vs Intruder"],
-        biResults["Intruder vs Bourgeois at home"],
-        biResults["Intruder vs Intruder"],
-      ],
-      backgroundColor: [
-        "rgba(34,197,94,.75)",
-        "rgba(34,197,94,.75)",
-        "rgba(249,115,22,.75)",
-        "rgba(249,115,22,.75)"
-      ],
-      borderColor: [
-        "#22c55e", "#22c55e", "#f97316", "#f97316"
-      ],
-      borderWidth: 1.5,
-      borderRadius: 5,
-    }]
-  );
-
-  // ── Bourgeois vs Intruder population dynamics ──
-  biPopChart = makeLineChart("chart-bi-pop", [
-    {
-      label: "🏠 Bourgeois avg payoff",
-      data: pRange.map(q => biSim.expectedBourgeois(q)),
-      borderColor: "#22c55e",
-      backgroundColor: "rgba(34,197,94,.08)"
-    },
-    {
-      label: "⚔️ Intruder avg payoff",
-      data: pRange.map(q => biSim.expectedIntruder(q)),
-      borderColor: "#f97316",
-      backgroundColor: "rgba(249,115,22,.08)"
-    }
-  ]);
-}
-
-function updateCharts(hdSim, biSim) {
-  const pRange = Array.from({ length: 101 }, (_, i) => i / 100);
-
-  // Update HD bar
-  const hdR = hdSim.run();
-  hdBarChart.data.datasets[0].data = Object.values(hdR);
-  hdBarChart.update();
-
-  // Update HD pop
-  hdPopChart.data.datasets[0].data = pRange.map(p => hdSim.expectedHawk(p));
-  hdPopChart.data.datasets[1].data = pRange.map(p => hdSim.expectedDove(p));
-  hdPopChart.update();
-
-  // Update BI bar
-  const biR = biSim.run();
-  biBarChart.data.datasets[0].data = [
-    biR["Bourgeois vs Bourgeois"],
-    biR["Bourgeois at home vs Intruder"],
-    biR["Intruder vs Bourgeois at home"],
-    biR["Intruder vs Intruder"],
-  ];
-  biBarChart.update();
-
-  // Update BI pop
-  biPopChart.data.datasets[0].data = pRange.map(q => biSim.expectedBourgeois(q));
-  biPopChart.data.datasets[1].data = pRange.map(q => biSim.expectedIntruder(q));
-  biPopChart.update();
-}
-
-function refreshAll() {
-  const win    = +document.getElementById("sl-win").value;
-  const draw   = +document.getElementById("sl-draw").value;
-  const loss   = +document.getElementById("sl-loss").value;
-  const injury = +document.getElementById("sl-injury").value;
-
-  // Update display labels
-  document.getElementById("val-win").textContent    = win;
-  document.getElementById("val-draw").textContent   = draw;
-  document.getElementById("val-loss").textContent   = loss;
-  document.getElementById("val-injury").textContent = injury;
-
-  const p = new Payoff(win, loss, draw, injury);
-  const hdSim = new HawkVsDoveSimulation(p);
-  const biSim = new BourgeoisVsIntruderSimulation(p);
-
-  // ── Update payoff matrix cells ──
-
-  // Hawk vs Dove
-  setCell("hd-hh", hdSim.hawkVsHawk());
-  setCell("hd-hd", hdSim.hawkVsDove().hawk);
-  setCell("hd-dh", hdSim.doveVsHawk().dove);
-  setCell("hd-dd", hdSim.doveVsDove());
-
-  // Bourgeois vs Intruder
-  setCell("bi-bb", biSim.bourgeoisVsBourgeois());
-  setCell("bi-bi", biSim.bourgeoisVsIntruderAvg());
-  setCell("bi-ib", (p.win + p.loss) / 2);
-  setCell("bi-ii", biSim.intruderVsIntruder());
-
-  // ── Update charts ──
-  if (hdBarChart) {
-    updateCharts(hdSim, biSim);
-  } else {
-    buildCharts(hdSim, biSim);
   }
-
-  // ── Update ESS analysis ──
-  updateHdEss(hdSim);
-  updateBiEss(biSim);
-}
-
-// ── Wire up sliders ────────────────────────────────────────────
-
-["sl-win", "sl-draw", "sl-loss", "sl-injury"].forEach(id => {
-  document.getElementById(id).addEventListener("input", refreshAll);
 });
 
-// ── Initial render ─────────────────────────────────────────────
-refreshAll();
+function _refreshChart() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  popChart.data.datasets[0].label = ClassA.emoji + ' ' + ClassA.label;
+  popChart.data.datasets[1].label = ClassB.emoji + ' ' + ClassB.label;
+  popChart.data.datasets[0].borderColor = ClassA.cssColor;
+  popChart.data.datasets[1].borderColor = ClassB.cssColor;
+  popChart.data.datasets[0].backgroundColor = ClassA.cssColor + '20';
+  popChart.data.datasets[1].backgroundColor = ClassB.cssColor + '20';
+  popChart.data.labels   = histA.map((_, i) => i + 1);
+  popChart.data.datasets[0].data = [...histA];
+  popChart.data.datasets[1].data = [...histB];
+  popChart.update('none');
+}
+
+/* ─── UI refresh ────────────────────────────────────────────── */
+
+function _refreshUI() {
+  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+  const ClassB = simType === 'hd' ? Dove : Intruder;
+  const cntA   = agents.filter(a => a.strategy instanceof ClassA).length;
+  const cntB   = agents.filter(a => a.strategy instanceof ClassB).length;
+
+  document.getElementById('cnt-a').textContent = cntA;
+  document.getElementById('cnt-b').textContent = cntB;
+  document.getElementById('lbl-a').textContent = ClassA.emoji + ' ' + ClassA.label;
+  document.getElementById('lbl-b').textContent = ClassB.emoji + ' ' + ClassB.label;
+  document.getElementById('cnt-a').style.color = ClassA.cssColor;
+  document.getElementById('cnt-b').style.color = ClassB.cssColor;
+  document.getElementById('hud-phase').textContent = PHASE_HUD[phase];
+  document.getElementById('hud-round').textContent = 'Round ' + round;
+  document.getElementById('header-legend').textContent =
+    ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATION LOOP
+   ═══════════════════════════════════════════════════════════════ */
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1); // cap delta to avoid jumps
+
+  // Update all agent positions each frame
+  agents.forEach(a => a.update(dt));
+
+  // Advance simulation when running
+  if (running) {
+    phaseTimer += dt * simSpeed;
+    if (phaseTimer >= PHASE_DUR[phase]) advancePhase();
+
+    // Smoothly lerp sky colour toward target
+    scene.background.lerp(PHASE_SKY[phase], dt * 1.5);
+  }
+
+  orbitCtrl.update();
+
+  // Resize renderer to match container (handles window resize & mobile)
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (renderer.domElement.width  !== Math.round(w * renderer.getPixelRatio()) ||
+      renderer.domElement.height !== Math.round(h * renderer.getPixelRatio())) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+/* ═══════════════════════════════════════════════════════════════
+   UI EVENT LISTENERS
+   ═══════════════════════════════════════════════════════════════ */
+
+// Play / Pause
+const btnPlay = document.getElementById('btn-play');
+btnPlay.addEventListener('click', () => {
+  running = !running;
+  btnPlay.textContent = running ? '⏸ Pause' : '▶ Play';
+  btnPlay.className   = running ? 'btn' : 'btn primary';
+  if (running) clock.getDelta(); // flush accumulated delta
+});
+
+// Reset
+document.getElementById('btn-reset').addEventListener('click', () => {
+  running = false;
+  btnPlay.textContent = '▶ Play';
+  btnPlay.className   = 'btn primary';
+  initAgents(
+    +document.getElementById('sl-init-a').value,
+    +document.getElementById('sl-init-b').value
+  );
+  scene.background.set(PHASE_SKY.fight);
+});
+
+// Speed slider
+document.getElementById('sl-speed').addEventListener('input', e => {
+  simSpeed = +e.target.value;
+  document.getElementById('val-speed').textContent = simSpeed + '×';
+});
+
+// Population sliders (just update label, reset applies the value)
+['a', 'b'].forEach(s => {
+  document.getElementById('sl-init-' + s).addEventListener('input', e => {
+    document.getElementById('val-init-' + s).textContent = e.target.value;
+  });
+});
+
+// Payoff sliders — take effect immediately
+['win', 'draw', 'loss', 'injury'].forEach(k => {
+  document.getElementById('sl-' + k).addEventListener('input', e => {
+    payoff[k] = +e.target.value;
+    document.getElementById('val-' + k).textContent = e.target.value;
+  });
+});
+
+// Sim type tabs
+document.querySelectorAll('.sim-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sim-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    simType = tab.dataset.sim;
+    running = false;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.className   = 'btn primary';
+
+    const isHD = simType === 'hd';
+    document.getElementById('lbl-sl-a').textContent = isHD ? '🦅 Hawks'     : '🏠 Bourgeois';
+    document.getElementById('lbl-sl-b').textContent = isHD ? '🕊️ Doves'    : '⚔️ Intruders';
+
+    initAgents(
+      +document.getElementById('sl-init-a').value,
+      +document.getElementById('sl-init-b').value
+    );
+    scene.background.set(PHASE_SKY.fight);
+  });
+});
+
+// ── Initial boot ──────────────────────────────────────────────
+initAgents(8, 8);
+scene.background.set(PHASE_SKY.fight);
 </script>
 </body>
 </html>
