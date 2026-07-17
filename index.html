@@ -310,7 +310,7 @@
       </div>
       <div class="sl-row">
         <label>🧬 Mutation</label>
-        <input type="range" id="sl-mutation" min="0" max="10" step="0.1" value="2.0" />
+        <input type="range" id="sl-mutation" min="0" max="10" step="0.1" value="2.0" aria-label="Mutation rate percentage" />
         <span class="val"  id="val-mutation">2.0%</span>
       </div>
     </div>
@@ -626,6 +626,7 @@ function _strategyPair() {
 }
 
 function _oppositeStrategyClass(StrategyClass) {
+  // Each simulation currently exposes a two-strategy pair, so mutation flips to the paired strategy.
   const [classA, classB] = _strategyPair();
   return StrategyClass === classA ? classB : classA;
 }
@@ -643,9 +644,9 @@ function _weightedPick(items, weights) {
   let roll = Math.random() * totalWeight;
   for (let i = 0; i < items.length; i++) {
     roll -= weights[i];
-    if (roll <= 0) return items[i];
+    if (roll <= 0) return { item: items[i], index: i };
   }
-  return items[items.length - 1];
+  return { item: items[items.length - 1], index: items.length - 1 };
 }
 
 function _weightedSampleWithoutReplacement(items, count, weights) {
@@ -654,12 +655,11 @@ function _weightedSampleWithoutReplacement(items, count, weights) {
   const picked      = [];
 
   while (picked.length < count && poolItems.length) {
-    const item = _weightedPick(poolItems, poolWeights);
-    if (!item) break;
-    const idx = poolItems.indexOf(item);
-    picked.push(item);
-    poolItems.splice(idx, 1);
-    poolWeights.splice(idx, 1);
+    const pick = _weightedPick(poolItems, poolWeights);
+    if (!pick) break;
+    picked.push(pick.item);
+    poolItems.splice(pick.index, 1);
+    poolWeights.splice(pick.index, 1);
   }
 
   return picked;
@@ -736,8 +736,9 @@ function runMatePhase() {
   const newborns = [];
 
   for (let i = 0; i < birthCount; i++) {
-    const parent = _weightedPick(agents, parentWeights);
-    if (!parent) break;
+    const pick = _weightedPick(agents, parentWeights);
+    if (!pick) break;
+    const parent = pick.item;
     selectedParents.push(parent);
 
     const StrategyClass = Math.random() < mutationRate
