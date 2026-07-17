@@ -444,9 +444,10 @@ mateRing.position.y = 0.04;
 scene.add(mateRing);
 
 // Territories — arranged in a ring (fewer than max agents → always contested)
-const NUM_TERRITORIES = 5;
+const TWO_PI           = Math.PI * 2;
+const NUM_TERRITORIES  = 5;
 const TERRITORY_RING_R = 5.8;
-const territories = [];
+const territories      = [];
 
 for (let i = 0; i < NUM_TERRITORIES; i++) {
   const angle = (i / NUM_TERRITORIES) * TWO_PI - Math.PI / 2;
@@ -553,7 +554,6 @@ const MIN_ENERGY_THRESHOLD   = -4;  // energy below this kills an agent
 const MAX_AGE                = 9;   // rounds before old-age death is possible
 const OLD_AGE_DEATH_PROB     = 0.3; // probability of dying each round past MAX_AGE
 const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics jumps
-const TWO_PI                 = Math.PI * 2;
 
 // Phase cycle: fight → roam → mate → cull → (back to fight)
 const PHASES    = ['fight', 'roam', 'mate', 'cull'];
