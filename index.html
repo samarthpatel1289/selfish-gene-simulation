@@ -270,7 +270,7 @@
     <!-- Population chart -->
     <div>
       <div class="slbl">Population Over Time</div>
-      <div class="chart-box"><canvas id="pop-chart"></canvas></div>
+      <div class="chart-box"><canvas id="pop-chart" role="img" aria-label="Population history chart. In Battle of the Sexes mode, faint dashed lines mark the 83% Coy and 62.5% Faithful theoretical equilibria."></canvas></div>
     </div>
 
     <!-- Controls -->
@@ -678,7 +678,7 @@ const BOS_EQUILIBRIUM = {
 const PRIMARY_DATASET_COUNT = 2;
 
 function getPhaseHudText(currentPhase) {
-  return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase];
+  return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase] ?? STANDARD_PHASE_HUD.fight;
 }
 
 function getPopulationTargets() {
@@ -911,8 +911,11 @@ function runBosMatePhase() {
   const newborns = [];
   const femalePool = buildWeightedPool(eligF);
   const malePool   = buildWeightedPool(eligM);
+  const femaleBirths = Math.floor(femalePool.length / 2);
+  const maleBirths   = Math.floor(malePool.length / 2);
 
-  for (let i = 0; i + 1 < femalePool.length; i += 2) {
+  // Sample with replacement so higher-fitness parents can contribute multiple offspring.
+  for (let births = 0; births < femaleBirths; births++) {
     const parent = pickWeightedAgent(femalePool);
     if (!parent) break;
     let ChildClass = parent.Class;
@@ -922,7 +925,7 @@ function runBosMatePhase() {
     newborns.push(spawnChild(parent, ChildClass));
   }
 
-  for (let i = 0; i + 1 < malePool.length; i += 2) {
+  for (let births = 0; births < maleBirths; births++) {
     const parent = pickWeightedAgent(malePool);
     if (!parent) break;
     let ChildClass = parent.Class;
