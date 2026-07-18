@@ -671,6 +671,10 @@ let phaseTimer = 0;
 // History for chart (last 60 rounds)
 const HIST_LEN = 60;
 const histA = [], histB = [];
+const BOS_EQUIBRIUM = {
+  coy: 83,
+  faithful: 62.5,
+};
 
 function getPhaseHudText(currentPhase) {
   return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase];
@@ -690,6 +694,8 @@ function buildWeightedPool(pool) {
   const viable = pool.filter(a => a.energy >= MIN_ENERGY_THRESHOLD);
   if (!viable.length) return [];
   const floor = Math.min(...viable.map(a => a.energy));
+  // Shift energies onto a strictly positive scale so roulette-wheel sampling
+  // stays proportional even when one sex's payoffs dip below zero.
   return viable.map(agent => ({
     agent,
     weight: Math.max(agent.energy - floor + 1, 0.001),
@@ -896,7 +902,7 @@ function runBosMatePhase() {
   const femalePool = buildWeightedPool(eligF);
   const malePool   = buildWeightedPool(eligM);
 
-  for (let i = 0; i + 1 < eligF.length; i += 2) {
+  for (let i = 0; i + 1 < femalePool.length; i += 2) {
     const parent = pickWeightedAgent(femalePool);
     if (!parent) break;
     let ChildClass = parent.Class;
@@ -906,7 +912,7 @@ function runBosMatePhase() {
     newborns.push(spawnChild(parent, ChildClass));
   }
 
-  for (let i = 0; i + 1 < eligM.length; i += 2) {
+  for (let i = 0; i + 1 < malePool.length; i += 2) {
     const parent = pickWeightedAgent(malePool);
     if (!parent) break;
     let ChildClass = parent.Class;
@@ -1066,8 +1072,9 @@ function _refreshChart() {
     popChart.data.datasets[0].backgroundColor = '#a78bfa20';
     popChart.data.datasets[1].backgroundColor = '#34d39920';
     popChart.options.scales.y.max = 100;
-    popChart.data.datasets[2].data = histA.map(() => 83);
-    popChart.data.datasets[3].data = histA.map(() => 62.5);
+    // Dawkins' mixed-strategy equilibrium targets: ~83% Coy females and 62.5% Faithful males.
+    popChart.data.datasets[2].data = histA.map(() => BOS_EQUIBRIUM.coy);
+    popChart.data.datasets[3].data = histA.map(() => BOS_EQUIBRIUM.faithful);
   } else {
     const ClassA = simType === 'hd' ? Hawk : Bourgeois;
     const ClassB = simType === 'hd' ? Dove : Intruder;
