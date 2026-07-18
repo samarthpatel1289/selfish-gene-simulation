@@ -699,19 +699,28 @@ function buildWeightedPool(pool) {
   // stays proportional even when one sex's payoffs dip below zero.
   return viable.map(agent => ({
     agent,
-    weight: Math.max(agent.energy - floor + 1, 0.001),
+    weight: Math.max(0, agent.energy - floor) + 1,
   }));
 }
 
 function pickWeightedAgent(weightedPool) {
+  if (!weightedPool.length) return null;
   const totalWeight = weightedPool.reduce((sum, entry) => sum + entry.weight, 0);
-  if (totalWeight <= 0) return weightedPool[Math.floor(Math.random() * weightedPool.length)]?.agent ?? null;
   let threshold = Math.random() * totalWeight;
   for (const entry of weightedPool) {
     threshold -= entry.weight;
     if (threshold <= 0) return entry.agent;
   }
   return weightedPool[weightedPool.length - 1]?.agent ?? null;
+}
+
+function buildInverseWeightedPool(pool) {
+  // Invert the survival weights so weaker agents are more likely to be trimmed
+  // when a sex grows beyond its cap, without reverting to a hard lowest-score cull.
+  return buildWeightedPool(pool).map(entry => ({
+    agent: entry.agent,
+    weight: 1 / entry.weight,
+  }));
 }
 
 function spawnChild(parent, ChildClass) {
@@ -952,15 +961,17 @@ function runCullPhase() {
     const maleSurvivors   = new Set(males);
 
     function trimToTarget(pool, survivors, target) {
-      const weightedPool = buildWeightedPool(pool).map(entry => ({
-        agent: entry.agent,
-        weight: 1 / entry.weight,
-      }));
+      const weightedPool = buildInverseWeightedPool(pool);
       let overflow = pool.length - target;
       while (overflow > 0 && weightedPool.length > 0) {
         const removed = pickWeightedAgent(weightedPool);
         const idx = weightedPool.findIndex(entry => entry.agent === removed);
-        if (!removed || idx === -1 || !survivors.delete(removed)) break;
+        if (!removed || idx === -1) break;
+        if (!survivors.has(removed)) {
+          weightedPool.splice(idx, 1);
+          continue;
+        }
+        survivors.delete(removed);
         weightedPool.splice(idx, 1);
         overflow--;
       }
