@@ -671,10 +671,11 @@ let phaseTimer = 0;
 // History for chart (last 60 rounds)
 const HIST_LEN = 60;
 const histA = [], histB = [];
-const BOS_EQUIBRIUM = {
+const BOS_EQUILIBRIUM = {
   coy: 83,
   faithful: 62.5,
 };
+const PRIMARY_DATASET_COUNT = 2;
 
 function getPhaseHudText(currentPhase) {
   return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase];
@@ -951,14 +952,16 @@ function runCullPhase() {
     const maleSurvivors   = new Set(males);
 
     function trimToTarget(pool, survivors, target) {
+      const weightedPool = buildWeightedPool(pool).map(entry => ({
+        agent: entry.agent,
+        weight: 1 / entry.weight,
+      }));
       let overflow = pool.length - target;
-      while (overflow > 0 && survivors.size > 0) {
-        const weightedPool = buildWeightedPool([...survivors]).map(entry => ({
-          agent: entry.agent,
-          weight: 1 / entry.weight,
-        }));
+      while (overflow > 0 && weightedPool.length > 0) {
         const removed = pickWeightedAgent(weightedPool);
-        if (!removed || !survivors.delete(removed)) break;
+        const idx = weightedPool.findIndex(entry => entry.agent === removed);
+        if (!removed || idx === -1 || !survivors.delete(removed)) break;
+        weightedPool.splice(idx, 1);
         overflow--;
       }
     }
@@ -1052,7 +1055,7 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
           color: '#94a3b8',
           font: { size: 10 },
           boxWidth: 10,
-          filter: item => item.datasetIndex < 2,
+          filter: item => item.datasetIndex < PRIMARY_DATASET_COUNT,
         }
       }
     },
@@ -1073,8 +1076,8 @@ function _refreshChart() {
     popChart.data.datasets[1].backgroundColor = '#34d39920';
     popChart.options.scales.y.max = 100;
     // Dawkins' mixed-strategy equilibrium targets: ~83% Coy females and 62.5% Faithful males.
-    popChart.data.datasets[2].data = histA.map(() => BOS_EQUIBRIUM.coy);
-    popChart.data.datasets[3].data = histA.map(() => BOS_EQUIBRIUM.faithful);
+    popChart.data.datasets[2].data = histA.map(() => BOS_EQUILIBRIUM.coy);
+    popChart.data.datasets[3].data = histA.map(() => BOS_EQUILIBRIUM.faithful);
   } else {
     const ClassA = simType === 'hd' ? Hawk : Bourgeois;
     const ClassB = simType === 'hd' ? Dove : Intruder;
