@@ -979,7 +979,6 @@ const BOS_EQUILIBRIUM = {
   coy: 83,       // chart percentages, matching the y-axis scale of 0–100
   faithful: 62.5,
 };
-const PRIMARY_DATASET_COUNT = 2;
 const REPRODUCTION_MULTIPLIER = 2;
 const MIN_WEIGHT_OFFSET = 1;
 const MAX_INVERSE_WEIGHT = 1e6;
@@ -1373,10 +1372,15 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
         borderWidth: 2, tension: 0.2, pointRadius: 0, fill: true },
       { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.14)',
         borderWidth: 2, tension: 0.2, pointRadius: 0, fill: true },
-      { label: `Coy equilibrium (${BOS_EQUILIBRIUM.coy}%)`, data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
+      { label: `Coy equilibrium (${BOS_EQUILIBRIUM.coy}%)`, isGuide: true, data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
-      { label: `Faithful equilibrium (${BOS_EQUILIBRIUM.faithful}%)`, data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
+      { label: `Faithful equilibrium (${BOS_EQUILIBRIUM.faithful}%)`, isGuide: true, data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
+      // Battle-of-the-Sexes extra series (complements of Coy/Faithful) — empty in other sims.
+      { label: '🌸 % Fast females',       data: [], borderColor: '#f472b6', backgroundColor: 'transparent',
+        borderWidth: 2, tension: 0.2, pointRadius: 0, fill: false },
+      { label: '🔥 % Philanderer males',  data: [], borderColor: '#fb923c', backgroundColor: 'transparent',
+        borderWidth: 2, tension: 0.2, pointRadius: 0, fill: false },
     ]
   },
   options: {
@@ -1391,8 +1395,11 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
           font: { size: 10 },
           boxWidth: 10,
           usePointStyle: true,
-          // Keep the legend focused on the live populations; the dashed equilibrium guides stay unlabeled there.
-          filter: item => item.datasetIndex < PRIMARY_DATASET_COUNT,
+          // Show a series in the legend only when it carries data and isn't a dashed equilibrium guide.
+          filter: (item, data) => {
+            const ds = data.datasets[item.datasetIndex];
+            return !ds.isGuide && ds.data && ds.data.length > 0;
+          },
         }
       },
       // Largest-Triangle-Three-Buckets keeps the curve's shape while capping drawn points,
@@ -1418,6 +1425,11 @@ function _refreshChart() {
     // Dawkins' mixed-strategy equilibrium targets: ~83% Coy females and 62.5% Faithful males.
     popChart.data.datasets[2].data = histA.map((_, i) => ({ x: i + 1, y: BOS_EQUILIBRIUM.coy }));
     popChart.data.datasets[3].data = histA.map((_, i) => ({ x: i + 1, y: BOS_EQUILIBRIUM.faithful }));
+    // Fast and Philanderer are the within-sex complements of Coy and Faithful.
+    popChart.data.datasets[4].label = '🌸 % Fast females';
+    popChart.data.datasets[5].label = '🔥 % Philanderer males';
+    popChart.data.datasets[4].data  = histA.map((v, i) => ({ x: i + 1, y: 100 - v }));
+    popChart.data.datasets[5].data  = histB.map((v, i) => ({ x: i + 1, y: 100 - v }));
   } else {
     const ClassA = simType === 'hd' ? Hawk : Bourgeois;
     const ClassB = simType === 'hd' ? Dove : Intruder;
@@ -1430,6 +1442,8 @@ function _refreshChart() {
     popChart.options.scales.y.max = undefined;
     popChart.data.datasets[2].data = [];
     popChart.data.datasets[3].data = [];
+    popChart.data.datasets[4].data = [];   // Fast — Battle-of-the-Sexes only
+    popChart.data.datasets[5].data = [];   // Philanderer — Battle-of-the-Sexes only
   }
   // parsing:false → supply explicit {x, y} points so decimation can down-sample long runs.
   popChart.data.labels   = histA.map((_, i) => i + 1);
