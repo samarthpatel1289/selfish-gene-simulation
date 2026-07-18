@@ -225,6 +225,7 @@
 <div class="sim-tabs">
   <button class="sim-tab active" data-sim="hd">🦅🕊️ Hawk vs Dove</button>
   <button class="sim-tab"        data-sim="bi">🏠⚔️ Bourgeois vs Intruder</button>
+  <button class="sim-tab"        data-sim="bs">♀♂ Battle of the Sexes</button>
 </div>
 
 <!-- ═══════════ APP ══════════════════════════════════════════ -->
@@ -251,6 +252,17 @@
         <div class="pop-card">
           <div class="num" id="cnt-b" style="color:#38bdf8">—</div>
           <div class="lbl" id="lbl-b">🕊️ Doves</div>
+        </div>
+      </div>
+      <!-- Extra row shown only in Battle of the Sexes mode -->
+      <div class="pop-row" id="pop-row-bs" style="display:none;margin-top:.45rem">
+        <div class="pop-card">
+          <div class="num" id="cnt-c" style="color:#34d399">—</div>
+          <div class="lbl" id="lbl-c">💙 Faithful</div>
+        </div>
+        <div class="pop-card">
+          <div class="num" id="cnt-d" style="color:#fb923c">—</div>
+          <div class="lbl" id="lbl-d">🔥 Philanderer</div>
         </div>
       </div>
     </div>
@@ -287,7 +299,8 @@
         <span class="val" id="val-init-b">8</span>
       </div>
 
-      <div class="slbl" style="margin-top:.2rem">Payoff Values</div>
+      <div class="slbl" style="margin-top:.2rem" id="payoff-label">Payoff Values</div>
+      <div id="std-payoff-section">
       <div class="sl-row">
         <label>🏆 Win</label>
         <input type="range" id="sl-win"    min="1" max="10" step="1" value="4" />
@@ -308,6 +321,25 @@
         <input type="range" id="sl-injury" min="-10" max="-1" step="1" value="-2" />
         <span class="val"  id="val-injury">-2</span>
       </div>
+      </div><!-- /std-payoff-section -->
+      <!-- Battle of the Sexes payoff parameters (shown only in BoS mode) -->
+      <div id="bos-payoff-section" style="display:none">
+      <div class="sl-row">
+        <label>👶 Benefit B</label>
+        <input type="range" id="sl-B" min="5" max="25" step="1" value="15" />
+        <span class="val" id="val-B">15</span>
+      </div>
+      <div class="sl-row">
+        <label>🍼 Rearing R</label>
+        <input type="range" id="sl-R" min="10" max="40" step="1" value="20" />
+        <span class="val" id="val-R">20</span>
+      </div>
+      <div class="sl-row">
+        <label>💌 Courtship C</label>
+        <input type="range" id="sl-C" min="0" max="10" step="1" value="3" />
+        <span class="val" id="val-C">3</span>
+      </div>
+      </div><!-- /bos-payoff-section -->
     </div>
 
   </div><!-- /side -->
@@ -375,6 +407,55 @@ class Intruder {
   compete(other, payoff) {
     if (other.is_bourgeois) return payoff.loss; // Bourgeois home-defender wins
     return (payoff.win + payoff.injury) / 2;    // Intruder vs Intruder: costly fight
+  }
+}
+
+/* ── Battle of the Sexes strategy classes ─────────────────────── */
+
+class CoyFemale {
+  static emoji    = '💜';
+  static label    = 'Coy';
+  static cssColor = '#a78bfa';
+  static hexColor = 0xa78bfa;
+  isFemale = true; isMale = false;
+  isCoy = true; isFast = false; isFaithful = false; isPhilanderer = false;
+}
+
+class FastFemale {
+  static emoji    = '🌸';
+  static label    = 'Fast';
+  static cssColor = '#f472b6';
+  static hexColor = 0xf472b6;
+  isFemale = true; isMale = false;
+  isCoy = false; isFast = true; isFaithful = false; isPhilanderer = false;
+}
+
+class FaithfulMale {
+  static emoji    = '💙';
+  static label    = 'Faithful';
+  static cssColor = '#34d399';
+  static hexColor = 0x34d399;
+  isFemale = false; isMale = true;
+  isCoy = false; isFast = false; isFaithful = true; isPhilanderer = false;
+}
+
+class PhilandererMale {
+  static emoji    = '🔥';
+  static label    = 'Philanderer';
+  static cssColor = '#fb923c';
+  static hexColor = 0xfb923c;
+  isFemale = false; isMale = true;
+  isCoy = false; isFast = false; isFaithful = false; isPhilanderer = true;
+}
+
+class BattlePayoff {
+  constructor(B = 15, R = 20, C = 3) { this.B = B; this.R = R; this.C = C; }
+  /** Return [femaleGain, maleGain] for one encounter. */
+  encounter(female, male) {
+    if (female.isCoy && male.isFaithful)    { const v = this.B - this.R/2 - this.C; return [v, v]; }
+    if (female.isCoy && male.isPhilanderer) { return [0, 0]; }
+    if (female.isFast && male.isFaithful)   { const v = this.B - this.R/2; return [v, v]; }
+    /* Fast × Philanderer */                  return [this.B - this.R, this.B];
   }
 }
 
@@ -543,8 +624,9 @@ class Agent {
    ═══════════════════════════════════════════════════════════════ */
 
 let payoff   = new Payoff();
+let bosPayoff = new BattlePayoff();
 let agents   = [];
-let simType  = 'hd';   // 'hd' (Hawk/Dove) or 'bi' (Bourgeois/Intruder)
+let simType  = 'hd';   // 'hd' | 'bi' | 'bs'
 let round    = 0;
 let running  = false;
 let simSpeed = 2;
@@ -584,11 +666,23 @@ function initAgents(countA, countB) {
   agents.forEach(a => a.dispose());
   agents = [];
 
-  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
-  const ClassB = simType === 'hd' ? Dove : Intruder;
-
-  for (let i = 0; i < countA; i++) agents.push(new Agent(ClassA));
-  for (let i = 0; i < countB; i++) agents.push(new Agent(ClassB));
+  if (simType === 'bs') {
+    // Two independent populations: females (Coy/Fast) and males (Faithful/Philanderer)
+    // countA = total females, countB = total males; start each sex 50/50
+    const nCoy      = Math.ceil(countA / 2);
+    const nFast     = countA - nCoy;
+    const nFaithful = Math.ceil(countB / 2);
+    const nPhil     = countB - nFaithful;
+    for (let i = 0; i < nCoy;      i++) agents.push(new Agent(CoyFemale));
+    for (let i = 0; i < nFast;     i++) agents.push(new Agent(FastFemale));
+    for (let i = 0; i < nFaithful; i++) agents.push(new Agent(FaithfulMale));
+    for (let i = 0; i < nPhil;     i++) agents.push(new Agent(PhilandererMale));
+  } else {
+    const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+    const ClassB = simType === 'hd' ? Dove : Intruder;
+    for (let i = 0; i < countA; i++) agents.push(new Agent(ClassA));
+    for (let i = 0; i < countB; i++) agents.push(new Agent(ClassB));
+  }
 
   round = 0; phase = 'fight'; phaseTimer = 0;
   histA.length = 0; histB.length = 0;
@@ -672,6 +766,35 @@ function runFightPhase() {
   });
 }
 
+/* ─── Battle of the Sexes Fight Phase ──────────────────────── */
+
+const MUTATION_RATE = 0.02;
+
+function runBosFightPhase() {
+  const females = agents.filter(a => a.strategy.isFemale).sort(() => Math.random() - 0.5);
+  const males   = agents.filter(a => a.strategy.isMale  ).sort(() => Math.random() - 0.5);
+
+  // Position females on left, males on right for visual distinction
+  females.forEach((f, i) => {
+    const angle = (i / Math.max(females.length, 1)) * Math.PI - Math.PI / 2;
+    f.moveTo(-3.5 + (Math.random() - 0.5) * 1.2, Math.sin(angle) * 3.5 + (Math.random() - 0.5) * 0.6);
+  });
+  males.forEach((m, i) => {
+    const angle = (i / Math.max(males.length, 1)) * Math.PI - Math.PI / 2;
+    m.moveTo(3.5 + (Math.random() - 0.5) * 1.2, Math.sin(angle) * 3.5 + (Math.random() - 0.5) * 0.6);
+  });
+
+  const pairs = Math.min(females.length, males.length);
+  for (let i = 0; i < pairs; i++) {
+    const f = females[i], m = males[i];
+    const [gF, gM] = bosPayoff.encounter(f.strategy, m.strategy);
+    f.energy += gF;
+    m.energy += gM;
+    if (gF > 0) f.pulse(2.0); else if (gF < 0) f.pulse(0.7, 250); else f.pulse(1.2);
+    if (gM > 0) m.pulse(2.0); else if (gM < 0) m.pulse(0.7, 250); else m.pulse(1.2);
+  }
+}
+
 /* ─── Mate Phase ────────────────────────────────────────────── */
 
 const MATE_THRESHOLD = 3;
@@ -705,6 +828,62 @@ function runMatePhase() {
   agents.filter(a => !eligible.includes(a)).forEach(a => a.wander());
 }
 
+/* ─── Battle of the Sexes Mate Phase (per-sex replicator) ───── */
+
+function runBosMatePhase() {
+  const females = agents.filter(a => a.strategy.isFemale);
+  const males   = agents.filter(a => a.strategy.isMale);
+
+  const eligF = females.filter(a => a.energy >= MATE_THRESHOLD);
+  const eligM = males.filter(a => a.energy >= MATE_THRESHOLD);
+
+  // Move eligible to mate zone
+  [...eligF, ...eligM].forEach(a => {
+    const angle = Math.random() * TWO_PI;
+    a.moveTo(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4);
+  });
+
+  const newborns = [];
+
+  // Reproduce females (with mutation between Coy ↔ Fast)
+  for (let i = 0; i + 1 < eligF.length; i += 2) {
+    if (agents.length + newborns.length >= MAX_POPULATION) break;
+    const parent = eligF[i];
+    let ChildClass = parent.Class;
+    if (Math.random() < MUTATION_RATE) {
+      ChildClass = parent.strategy.isCoy ? FastFemale : CoyFemale;
+    }
+    const child = new Agent(ChildClass);
+    child.energy = 1;
+    child.sprite.position.copy(parent.sprite.position);
+    child._target.copy(parent.sprite.position);
+    child.pulse(2.5, 400);
+    newborns.push(child);
+  }
+
+  // Reproduce males (with mutation between Faithful ↔ Philanderer)
+  for (let i = 0; i + 1 < eligM.length; i += 2) {
+    if (agents.length + newborns.length >= MAX_POPULATION) break;
+    const parent = eligM[i];
+    let ChildClass = parent.Class;
+    if (Math.random() < MUTATION_RATE) {
+      ChildClass = parent.strategy.isFaithful ? PhilandererMale : FaithfulMale;
+    }
+    const child = new Agent(ChildClass);
+    child.energy = 1;
+    child.sprite.position.copy(parent.sprite.position);
+    child._target.copy(parent.sprite.position);
+    child.pulse(2.5, 400);
+    newborns.push(child);
+  }
+
+  agents.push(...newborns);
+
+  // Send non-eligible to wander
+  const eligible = new Set([...eligF, ...eligM]);
+  agents.filter(a => !eligible.has(a)).forEach(a => a.wander());
+}
+
 /* ─── Cull Phase ────────────────────────────────────────────── */
 
 function runCullPhase() {
@@ -733,8 +912,15 @@ function runCullPhase() {
 /* ─── Advance one phase ─────────────────────────────────────── */
 
 function advancePhase() {
-  if      (phase === 'fight') { runFightPhase(); phase = 'roam'; agents.forEach(a => a.wander()); }
-  else if (phase === 'roam')  { phase = 'mate';  runMatePhase(); }
+  if      (phase === 'fight') {
+    if (simType === 'bs') runBosFightPhase(); else runFightPhase();
+    phase = 'roam';
+    agents.forEach(a => a.wander());
+  }
+  else if (phase === 'roam')  {
+    phase = 'mate';
+    if (simType === 'bs') runBosMatePhase(); else runMatePhase();
+  }
   else if (phase === 'mate')  { phase = 'cull'; }
   else {
     runCullPhase();
@@ -752,10 +938,21 @@ function advancePhase() {
 /* ─── History & chart ───────────────────────────────────────── */
 
 function _recordHistory() {
-  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
-  const ClassB = simType === 'hd' ? Dove : Intruder;
-  histA.push(agents.filter(a => a.strategy instanceof ClassA).length);
-  histB.push(agents.filter(a => a.strategy instanceof ClassB).length);
+  if (simType === 'bs') {
+    const females = agents.filter(a => a.strategy.isFemale);
+    const males   = agents.filter(a => a.strategy.isMale);
+    const pctCoy      = females.length > 0
+      ? females.filter(a => a.strategy.isCoy).length      / females.length * 100 : 0;
+    const pctFaithful = males.length   > 0
+      ? males.filter(a => a.strategy.isFaithful).length   / males.length   * 100 : 0;
+    histA.push(Math.round(pctCoy));
+    histB.push(Math.round(pctFaithful));
+  } else {
+    const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+    const ClassB = simType === 'hd' ? Dove : Intruder;
+    histA.push(agents.filter(a => a.strategy instanceof ClassA).length);
+    histB.push(agents.filter(a => a.strategy instanceof ClassB).length);
+  }
   if (histA.length > HIST_LEN) { histA.shift(); histB.shift(); }
 }
 
@@ -781,14 +978,25 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
 });
 
 function _refreshChart() {
-  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
-  const ClassB = simType === 'hd' ? Dove : Intruder;
-  popChart.data.datasets[0].label = ClassA.emoji + ' ' + ClassA.label;
-  popChart.data.datasets[1].label = ClassB.emoji + ' ' + ClassB.label;
-  popChart.data.datasets[0].borderColor = ClassA.cssColor;
-  popChart.data.datasets[1].borderColor = ClassB.cssColor;
-  popChart.data.datasets[0].backgroundColor = ClassA.cssColor + '20';
-  popChart.data.datasets[1].backgroundColor = ClassB.cssColor + '20';
+  if (simType === 'bs') {
+    popChart.data.datasets[0].label           = '💜 % Coy females';
+    popChart.data.datasets[1].label           = '💙 % Faithful males';
+    popChart.data.datasets[0].borderColor     = '#a78bfa';
+    popChart.data.datasets[1].borderColor     = '#34d399';
+    popChart.data.datasets[0].backgroundColor = '#a78bfa20';
+    popChart.data.datasets[1].backgroundColor = '#34d39920';
+    popChart.options.scales.y.max = 100;
+  } else {
+    const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+    const ClassB = simType === 'hd' ? Dove : Intruder;
+    popChart.data.datasets[0].label           = ClassA.emoji + ' ' + ClassA.label;
+    popChart.data.datasets[1].label           = ClassB.emoji + ' ' + ClassB.label;
+    popChart.data.datasets[0].borderColor     = ClassA.cssColor;
+    popChart.data.datasets[1].borderColor     = ClassB.cssColor;
+    popChart.data.datasets[0].backgroundColor = ClassA.cssColor + '20';
+    popChart.data.datasets[1].backgroundColor = ClassB.cssColor + '20';
+    popChart.options.scales.y.max = undefined;
+  }
   popChart.data.labels   = histA.map((_, i) => i + 1);
   popChart.data.datasets[0].data = [...histA];
   popChart.data.datasets[1].data = [...histB];
@@ -798,21 +1006,43 @@ function _refreshChart() {
 /* ─── UI refresh ────────────────────────────────────────────── */
 
 function _refreshUI() {
-  const ClassA = simType === 'hd' ? Hawk : Bourgeois;
-  const ClassB = simType === 'hd' ? Dove : Intruder;
-  const cntA   = agents.filter(a => a.strategy instanceof ClassA).length;
-  const cntB   = agents.filter(a => a.strategy instanceof ClassB).length;
+  if (simType === 'bs') {
+    const females  = agents.filter(a => a.strategy.isFemale);
+    const males    = agents.filter(a => a.strategy.isMale);
+    const nCoy     = females.filter(a => a.strategy.isCoy).length;
+    const nFast    = females.filter(a => a.strategy.isFast).length;
+    const nFaith   = males.filter(a => a.strategy.isFaithful).length;
+    const nPhil    = males.filter(a => a.strategy.isPhilanderer).length;
 
-  document.getElementById('cnt-a').textContent = cntA;
-  document.getElementById('cnt-b').textContent = cntB;
-  document.getElementById('lbl-a').textContent = ClassA.emoji + ' ' + ClassA.label;
-  document.getElementById('lbl-b').textContent = ClassB.emoji + ' ' + ClassB.label;
-  document.getElementById('cnt-a').style.color = ClassA.cssColor;
-  document.getElementById('cnt-b').style.color = ClassB.cssColor;
+    document.getElementById('cnt-a').textContent = nCoy;
+    document.getElementById('cnt-b').textContent = nFast;
+    document.getElementById('cnt-c').textContent = nFaith;
+    document.getElementById('cnt-d').textContent = nPhil;
+    document.getElementById('lbl-a').textContent = '💜 Coy';
+    document.getElementById('lbl-b').textContent = '🌸 Fast';
+    document.getElementById('lbl-c').textContent = '💙 Faithful';
+    document.getElementById('lbl-d').textContent = '🔥 Philanderer';
+    document.getElementById('cnt-a').style.color = '#a78bfa';
+    document.getElementById('cnt-b').style.color = '#f472b6';
+    document.getElementById('header-legend').textContent =
+      '💜 Coy  🌸 Fast  💙 Faithful  🔥 Philanderer';
+  } else {
+    const ClassA = simType === 'hd' ? Hawk : Bourgeois;
+    const ClassB = simType === 'hd' ? Dove : Intruder;
+    const cntA   = agents.filter(a => a.strategy instanceof ClassA).length;
+    const cntB   = agents.filter(a => a.strategy instanceof ClassB).length;
+
+    document.getElementById('cnt-a').textContent = cntA;
+    document.getElementById('cnt-b').textContent = cntB;
+    document.getElementById('lbl-a').textContent = ClassA.emoji + ' ' + ClassA.label;
+    document.getElementById('lbl-b').textContent = ClassB.emoji + ' ' + ClassB.label;
+    document.getElementById('cnt-a').style.color = ClassA.cssColor;
+    document.getElementById('cnt-b').style.color = ClassB.cssColor;
+    document.getElementById('header-legend').textContent =
+      ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
+  }
   document.getElementById('hud-phase').textContent = PHASE_HUD[phase];
   document.getElementById('hud-round').textContent = 'Round ' + round;
-  document.getElementById('header-legend').textContent =
-    ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -900,6 +1130,14 @@ document.getElementById('sl-speed').addEventListener('input', e => {
   });
 });
 
+// Battle of the Sexes payoff sliders
+['B', 'R', 'C'].forEach(k => {
+  document.getElementById('sl-' + k).addEventListener('input', e => {
+    bosPayoff[k] = +e.target.value;
+    document.getElementById('val-' + k).textContent = e.target.value;
+  });
+});
+
 // Sim type tabs
 document.querySelectorAll('.sim-tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -910,9 +1148,21 @@ document.querySelectorAll('.sim-tab').forEach(tab => {
     btnPlay.textContent = '▶ Play';
     btnPlay.className   = 'btn primary';
 
+    const isBS = simType === 'bs';
     const isHD = simType === 'hd';
-    document.getElementById('lbl-sl-a').textContent = isHD ? '🦅 Hawks'     : '🏠 Bourgeois';
-    document.getElementById('lbl-sl-b').textContent = isHD ? '🕊️ Doves'    : '⚔️ Intruders';
+
+    // Show/hide population extra row
+    document.getElementById('pop-row-bs').style.display = isBS ? 'grid' : 'none';
+
+    // Show/hide correct payoff sliders
+    document.getElementById('std-payoff-section').style.display  = isBS ? 'none'  : '';
+    document.getElementById('bos-payoff-section').style.display  = isBS ? ''      : 'none';
+    document.getElementById('payoff-label').textContent = isBS
+      ? 'Payoff Parameters' : 'Payoff Values';
+
+    // Update starting-population slider labels
+    document.getElementById('lbl-sl-a').textContent = isBS ? '♀ Females' : (isHD ? '🦅 Hawks'     : '🏠 Bourgeois');
+    document.getElementById('lbl-sl-b').textContent = isBS ? '♂ Males'   : (isHD ? '🕊️ Doves'    : '⚔️ Intruders');
 
     initAgents(
       +document.getElementById('sl-init-a').value,
