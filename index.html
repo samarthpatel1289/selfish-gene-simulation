@@ -270,7 +270,7 @@
     <!-- Population chart -->
     <div>
       <div class="slbl">Population Over Time</div>
-      <div class="chart-box"><canvas id="pop-chart" role="img"></canvas></div>
+      <div class="chart-box"><canvas id="pop-chart" role="img" aria-label="Population history chart."></canvas></div>
     </div>
 
     <!-- Controls -->
@@ -671,13 +671,16 @@ let phaseTimer = 0;
 // History for chart (last 60 rounds)
 const HIST_LEN = 60;
 const histA = [], histB = [];
-// Dawkins' Battle of the Sexes mixed-strategy equilibrium, expressed in chart percentages.
+// Dawkins' Battle of the Sexes mixed-strategy equilibrium, expressed in chart percentages
+// for the 0–100 y-axis used by the UI chart.
 const BOS_EQUILIBRIUM = {
   coy: 83,       // chart percentages, matching the y-axis scale of 0–100
   faithful: 62.5,
 };
 const PRIMARY_DATASET_COUNT = 2;
 const REPRODUCTION_MULTIPLIER = 2;
+const MIN_WEIGHT_OFFSET = 1;
+const MAX_INVERSE_WEIGHT = 1e6;
 
 function getPhaseHudText(currentPhase) {
   return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase] ?? STANDARD_PHASE_HUD.fight;
@@ -707,7 +710,7 @@ function buildWeightedPool(pool) {
   // stays proportional even when one sex's payoffs dip below zero.
   return viable.map(agent => ({
     agent,
-    weight: Math.max(0, agent.energy - floor) + 1,
+    weight: Math.max(0, agent.energy - floor) + MIN_WEIGHT_OFFSET,
   }));
 }
 
@@ -728,7 +731,7 @@ function buildInverseWeightedPool(pool) {
   // when a sex grows beyond its cap, without reverting to a hard lowest-score cull.
   return buildWeightedPool(pool).map(entry => ({
     agent: entry.agent,
-    weight: Math.min(1 / Math.max(entry.weight, Number.EPSILON), 1e6),
+    weight: Math.min(1 / Math.max(entry.weight, Number.EPSILON), MAX_INVERSE_WEIGHT),
   }));
 }
 
@@ -964,7 +967,7 @@ function runCullPhase() {
 
   const deadSet = new Set(dead);
   const alive = agents.filter(a => !deadSet.has(a));
-  const { a: targetA, b: targetB, total } = getPopulationTargets();
+  const { a: femaleTarget, b: maleTarget, total } = getPopulationTargets();
 
   if (simType === 'bs') {
     const females = alive.filter(agent => agent.strategy.isFemale);
@@ -991,8 +994,8 @@ function runCullPhase() {
       }
     }
 
-    trimToTarget(females, femaleSurvivors, targetA * REPRODUCTION_MULTIPLIER);
-    trimToTarget(males, maleSurvivors, targetB * REPRODUCTION_MULTIPLIER);
+    trimToTarget(females, femaleSurvivors, femaleTarget * REPRODUCTION_MULTIPLIER);
+    trimToTarget(males, maleSurvivors, maleTarget * REPRODUCTION_MULTIPLIER);
 
     alive.forEach(agent => {
       if (agent.strategy.isFemale && !femaleSurvivors.has(agent)) dead.push(agent);
@@ -1066,9 +1069,9 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
       { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
-      { label: 'Coy equilibrium (83%)', data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
+      { label: `Coy equilibrium (${BOS_EQUILIBRIUM.coy}%)`, data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
-      { label: 'Faithful equilibrium (62.5%)', data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
+      { label: `Faithful equilibrium (${BOS_EQUILIBRIUM.faithful}%)`, data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
     ]
   },
