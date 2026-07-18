@@ -270,7 +270,7 @@
     <!-- Population chart -->
     <div>
       <div class="slbl">Population Over Time</div>
-      <div class="chart-box"><canvas id="pop-chart" role="img" aria-label="Population history chart. In Battle of the Sexes mode, faint dashed lines mark the 83% Coy and 62.5% Faithful theoretical equilibria."></canvas></div>
+      <div class="chart-box"><canvas id="pop-chart" role="img"></canvas></div>
     </div>
 
     <!-- Controls -->
@@ -672,7 +672,7 @@ let phaseTimer = 0;
 const HIST_LEN = 60;
 const histA = [], histB = [];
 const BOS_EQUILIBRIUM = {
-  coy: 83,
+  coy: 83,       // chart percentages, matching the y-axis scale of 0–100
   faithful: 62.5,
 };
 const PRIMARY_DATASET_COUNT = 2;
@@ -687,6 +687,7 @@ function getPopulationTargets() {
   return {
     a: targetA,
     b: targetB,
+    // Allow each starting slot to reproduce once before the cap trims the pool back down.
     total: (targetA + targetB) * 2,
   };
 }
@@ -711,6 +712,7 @@ function pickWeightedAgent(weightedPool) {
     threshold -= entry.weight;
     if (threshold <= 0) return entry.agent;
   }
+  // Defensive fallback for floating-point edge cases.
   return weightedPool[weightedPool.length - 1]?.agent ?? null;
 }
 
@@ -719,7 +721,7 @@ function buildInverseWeightedPool(pool) {
   // when a sex grows beyond its cap, without reverting to a hard lowest-score cull.
   return buildWeightedPool(pool).map(entry => ({
     agent: entry.agent,
-    weight: 1 / entry.weight,
+    weight: 1 / Math.max(entry.weight, Number.EPSILON),
   }));
 }
 
@@ -840,7 +842,7 @@ function runFightPhase() {
 
 /* ─── Battle of the Sexes Fight Phase ──────────────────────── */
 
-let bosMutationRate = 0.01;
+let battleOfSexesMutationRate = 0.01;
 
 function runBosFightPhase() {
   const females = agents.filter(a => a.strategy.isFemale).sort(() => Math.random() - 0.5);
@@ -919,7 +921,7 @@ function runBosMatePhase() {
     const parent = pickWeightedAgent(femalePool);
     if (!parent) break;
     let ChildClass = parent.Class;
-    if (Math.random() < bosMutationRate) {
+    if (Math.random() < battleOfSexesMutationRate) {
       ChildClass = parent.strategy.isCoy ? FastFemale : CoyFemale;
     }
     newborns.push(spawnChild(parent, ChildClass));
@@ -929,7 +931,7 @@ function runBosMatePhase() {
     const parent = pickWeightedAgent(malePool);
     if (!parent) break;
     let ChildClass = parent.Class;
-    if (Math.random() < bosMutationRate) {
+    if (Math.random() < battleOfSexesMutationRate) {
       ChildClass = parent.strategy.isFaithful ? PhilandererMale : FaithfulMale;
     }
     newborns.push(spawnChild(parent, ChildClass));
@@ -963,6 +965,8 @@ function runCullPhase() {
     const femaleSurvivors = new Set(females);
     const maleSurvivors   = new Set(males);
 
+    // Trim one sex back to its population cap by making weaker agents
+    // more likely to be removed, rather than deleting the lowest scorers outright.
     function trimToTarget(pool, survivors, target) {
       const weightedPool = buildInverseWeightedPool(pool);
       let overflow = pool.length - target;
@@ -1055,9 +1059,9 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
       { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
-      { label: 'Coy target', data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
+      { label: 'Coy equilibrium (83%)', data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
-      { label: 'Faithful target', data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
+      { label: 'Faithful equilibrium (62.5%)', data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
         borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
     ]
   },
@@ -1149,6 +1153,12 @@ function _refreshUI() {
     document.getElementById('header-legend').textContent =
       ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
   }
+  document.getElementById('pop-chart').setAttribute(
+    'aria-label',
+    simType === 'bs'
+      ? 'Population history chart. Faint dashed lines mark the 83 percent Coy and 62.5 percent Faithful theoretical equilibria.'
+      : 'Population history chart for the active simulation.'
+  );
   document.getElementById('hud-phase').textContent = getPhaseHudText(phase);
   document.getElementById('hud-round').textContent = 'Round ' + round;
 }
@@ -1246,7 +1256,7 @@ document.getElementById('sl-speed').addEventListener('input', e => {
   });
 });
 document.getElementById('sl-mutation').addEventListener('input', e => {
-  bosMutationRate = +e.target.value / 100;
+  battleOfSexesMutationRate = +e.target.value / 100;
   document.getElementById('val-mutation').textContent = `${(+e.target.value).toFixed(1)}%`;
 });
 
