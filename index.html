@@ -290,13 +290,13 @@
       <div class="slbl" style="margin-top:.2rem">Starting Population</div>
       <div class="sl-row">
         <label id="lbl-sl-a">🦅 Hawks</label>
-        <input type="range" id="sl-init-a" min="2" max="14" step="1" value="8" />
-        <span class="val" id="val-init-a">8</span>
+        <input type="range" id="sl-init-a" min="2" max="100" step="1" value="50" />
+        <span class="val" id="val-init-a">50</span>
       </div>
       <div class="sl-row">
         <label id="lbl-sl-b">🕊️ Doves</label>
-        <input type="range" id="sl-init-b" min="2" max="14" step="1" value="8" />
-        <span class="val" id="val-init-b">8</span>
+        <input type="range" id="sl-init-b" min="2" max="100" step="1" value="50" />
+        <span class="val" id="val-init-b">50</span>
       </div>
 
       <div class="slbl" style="margin-top:.2rem" id="payoff-label">Payoff Values</div>
@@ -338,6 +338,11 @@
         <label>💌 Courtship C</label>
         <input type="range" id="sl-C" min="0" max="10" step="1" value="3" />
         <span class="val" id="val-C">3</span>
+      </div>
+      <div class="sl-row">
+        <label>🧬 Mutation</label>
+        <input type="range" id="sl-mutation" min="0" max="10" step="0.1" value="1" />
+        <span class="val" id="val-mutation">1.0%</span>
       </div>
       </div><!-- /bos-payoff-section -->
     </div>
@@ -641,11 +646,17 @@ const MAX_DELTA_TIME         = 0.1; // frame-time cap (seconds) to avoid physics
 // Phase cycle: fight → roam → mate → cull → (back to fight)
 const PHASES    = ['fight', 'roam', 'mate', 'cull'];
 const PHASE_DUR = { fight: 2.2, roam: 0.9, mate: 2.0, cull: 0.6 };
-const PHASE_HUD = {
+const STANDARD_PHASE_HUD = {
   fight: '🌅 Fight Phase — territories are contested',
   roam:  '☀️  Roaming',
   mate:  '🌇 Mate Phase — offspring are born',
   cull:  '🌙 Night — weak agents die',
+};
+const BOS_PHASE_HUD = {
+  fight: '💌 Courtship — pairs size each other up',
+  roam:  '☀️  Roaming',
+  mate:  '💕 Mating — offspring are conceived',
+  cull:  '🍼 Rearing — the next generation is selected',
 };
 const PHASE_SKY = {
   fight: new THREE.Color(0x5c2020),
@@ -660,6 +671,50 @@ let phaseTimer = 0;
 // History for chart (last 60 rounds)
 const HIST_LEN = 60;
 const histA = [], histB = [];
+
+function getPhaseHudText(currentPhase) {
+  return (simType === 'bs' ? BOS_PHASE_HUD : STANDARD_PHASE_HUD)[currentPhase];
+}
+
+function getPopulationTargets() {
+  const targetA = +document.getElementById('sl-init-a').value;
+  const targetB = +document.getElementById('sl-init-b').value;
+  return {
+    a: targetA,
+    b: targetB,
+    total: (targetA + targetB) * 2,
+  };
+}
+
+function buildWeightedPool(pool) {
+  const viable = pool.filter(a => a.energy >= MIN_ENERGY_THRESHOLD);
+  if (!viable.length) return [];
+  const floor = Math.min(...viable.map(a => a.energy));
+  return viable.map(agent => ({
+    agent,
+    weight: Math.max(agent.energy - floor + 1, 0.001),
+  }));
+}
+
+function pickWeightedAgent(weightedPool) {
+  const totalWeight = weightedPool.reduce((sum, entry) => sum + entry.weight, 0);
+  if (totalWeight <= 0) return weightedPool[Math.floor(Math.random() * weightedPool.length)]?.agent ?? null;
+  let threshold = Math.random() * totalWeight;
+  for (const entry of weightedPool) {
+    threshold -= entry.weight;
+    if (threshold <= 0) return entry.agent;
+  }
+  return weightedPool[weightedPool.length - 1]?.agent ?? null;
+}
+
+function spawnChild(parent, ChildClass) {
+  const child = new Agent(ChildClass);
+  child.energy = 1;
+  child.sprite.position.copy(parent.sprite.position);
+  child._target.copy(parent.sprite.position);
+  child.pulse(2.5, 400);
+  return child;
+}
 
 /* ─── init / reset ──────────────────────────────────────────── */
 
@@ -769,7 +824,7 @@ function runFightPhase() {
 
 /* ─── Battle of the Sexes Fight Phase ──────────────────────── */
 
-const MUTATION_RATE = 0.02;
+let bosMutationRate = 0.01;
 
 function runBosFightPhase() {
   const females = agents.filter(a => a.strategy.isFemale).sort(() => Math.random() - 0.5);
@@ -799,10 +854,10 @@ function runBosFightPhase() {
 /* ─── Mate Phase ────────────────────────────────────────────── */
 
 const MATE_THRESHOLD = 3;
-const MAX_POPULATION = 28;
 
 function runMatePhase() {
   const eligible = agents.filter(a => a.energy >= MATE_THRESHOLD);
+  const maxPopulation = getPopulationTargets().total;
 
   // Move eligible agents to mate zone (center)
   eligible.forEach(a => {
@@ -813,15 +868,9 @@ function runMatePhase() {
   // Produce one offspring per two eligible parents
   const newborns = [];
   for (let i = 0; i + 1 < eligible.length; i += 2) {
-    if (agents.length + newborns.length >= MAX_POPULATION) break;
+    if (agents.length + newborns.length >= maxPopulation) break;
     const parent = eligible[i];
-    const child  = new Agent(parent.Class);
-    child.energy = 1;
-    // Spawn near parent
-    child.sprite.position.copy(parent.sprite.position);
-    child._target.copy(parent.sprite.position);
-    child.pulse(2.5, 400);
-    newborns.push(child);
+    newborns.push(spawnChild(parent, parent.Class));
   }
   agents.push(...newborns);
 
@@ -834,7 +883,6 @@ function runMatePhase() {
 function runBosMatePhase() {
   const females = agents.filter(a => a.strategy.isFemale);
   const males   = agents.filter(a => a.strategy.isMale);
-
   const eligF = females.filter(a => a.energy >= MATE_THRESHOLD);
   const eligM = males.filter(a => a.energy >= MATE_THRESHOLD);
 
@@ -845,37 +893,27 @@ function runBosMatePhase() {
   });
 
   const newborns = [];
+  const femalePool = buildWeightedPool(eligF);
+  const malePool   = buildWeightedPool(eligM);
 
-  // Reproduce females (with mutation between Coy ↔ Fast)
   for (let i = 0; i + 1 < eligF.length; i += 2) {
-    if (agents.length + newborns.length >= MAX_POPULATION) break;
-    const parent = eligF[i];
+    const parent = pickWeightedAgent(femalePool);
+    if (!parent) break;
     let ChildClass = parent.Class;
-    if (Math.random() < MUTATION_RATE) {
+    if (Math.random() < bosMutationRate) {
       ChildClass = parent.strategy.isCoy ? FastFemale : CoyFemale;
     }
-    const child = new Agent(ChildClass);
-    child.energy = 1;
-    child.sprite.position.copy(parent.sprite.position);
-    child._target.copy(parent.sprite.position);
-    child.pulse(2.5, 400);
-    newborns.push(child);
+    newborns.push(spawnChild(parent, ChildClass));
   }
 
-  // Reproduce males (with mutation between Faithful ↔ Philanderer)
   for (let i = 0; i + 1 < eligM.length; i += 2) {
-    if (agents.length + newborns.length >= MAX_POPULATION) break;
-    const parent = eligM[i];
+    const parent = pickWeightedAgent(malePool);
+    if (!parent) break;
     let ChildClass = parent.Class;
-    if (Math.random() < MUTATION_RATE) {
+    if (Math.random() < bosMutationRate) {
       ChildClass = parent.strategy.isFaithful ? PhilandererMale : FaithfulMale;
     }
-    const child = new Agent(ChildClass);
-    child.energy = 1;
-    child.sprite.position.copy(parent.sprite.position);
-    child._target.copy(parent.sprite.position);
-    child.pulse(2.5, 400);
-    newborns.push(child);
+    newborns.push(spawnChild(parent, ChildClass));
   }
 
   agents.push(...newborns);
@@ -896,11 +934,39 @@ function runCullPhase() {
     if (tooWeak || oldAge) dead.push(a);
   });
 
-  // If over population cap, remove the weakest excess agents
-  if (agents.length - dead.length > MAX_POPULATION) {
-    const alive = agents.filter(a => !dead.includes(a));
+  const deadSet = new Set(dead);
+  const alive = agents.filter(a => !deadSet.has(a));
+  const { a: targetA, b: targetB, total } = getPopulationTargets();
+
+  if (simType === 'bs') {
+    const females = alive.filter(agent => agent.strategy.isFemale);
+    const males   = alive.filter(agent => agent.strategy.isMale);
+    const femaleSurvivors = new Set(females);
+    const maleSurvivors   = new Set(males);
+
+    function trimToTarget(pool, survivors, target) {
+      let overflow = pool.length - target;
+      while (overflow > 0 && survivors.size > 0) {
+        const weightedPool = buildWeightedPool([...survivors]).map(entry => ({
+          agent: entry.agent,
+          weight: 1 / entry.weight,
+        }));
+        const removed = pickWeightedAgent(weightedPool);
+        if (!removed || !survivors.delete(removed)) break;
+        overflow--;
+      }
+    }
+
+    trimToTarget(females, femaleSurvivors, targetA * 2);
+    trimToTarget(males, maleSurvivors, targetB * 2);
+
+    alive.forEach(agent => {
+      if (agent.strategy.isFemale && !femaleSurvivors.has(agent)) dead.push(agent);
+      if (agent.strategy.isMale && !maleSurvivors.has(agent)) dead.push(agent);
+    });
+  } else if (alive.length > total) {
     alive.sort((a, b) => a.energy - b.energy);
-    const excess = alive.length - MAX_POPULATION;
+    const excess = alive.length - total;
     for (let i = 0; i < excess; i++) dead.push(alive[i]);
   }
 
@@ -966,11 +1032,24 @@ const popChart = new Chart(document.getElementById('pop-chart'), {
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
       { label: '🕊️ Doves',  data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,.12)',
         borderWidth: 2, tension: 0.3, pointRadius: 0, fill: true },
+      { label: 'Coy target', data: [], borderColor: 'rgba(167,139,250,.28)', backgroundColor: 'transparent',
+        borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
+      { label: 'Faithful target', data: [], borderColor: 'rgba(52,211,153,.28)', backgroundColor: 'transparent',
+        borderWidth: 1, borderDash: [6, 6], tension: 0, pointRadius: 0, fill: false },
     ]
   },
   options: {
     responsive: true, maintainAspectRatio: false, animation: false,
-    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 10 } } },
+    plugins: {
+      legend: {
+        labels: {
+          color: '#94a3b8',
+          font: { size: 10 },
+          boxWidth: 10,
+          filter: item => item.datasetIndex < 2,
+        }
+      }
+    },
     scales: {
       x: { display: false },
       y: { beginAtZero: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } }
@@ -987,6 +1066,8 @@ function _refreshChart() {
     popChart.data.datasets[0].backgroundColor = '#a78bfa20';
     popChart.data.datasets[1].backgroundColor = '#34d39920';
     popChart.options.scales.y.max = 100;
+    popChart.data.datasets[2].data = histA.map(() => 83);
+    popChart.data.datasets[3].data = histA.map(() => 62.5);
   } else {
     const ClassA = simType === 'hd' ? Hawk : Bourgeois;
     const ClassB = simType === 'hd' ? Dove : Intruder;
@@ -997,6 +1078,8 @@ function _refreshChart() {
     popChart.data.datasets[0].backgroundColor = ClassA.cssColor + '20';
     popChart.data.datasets[1].backgroundColor = ClassB.cssColor + '20';
     popChart.options.scales.y.max = undefined;
+    popChart.data.datasets[2].data = [];
+    popChart.data.datasets[3].data = [];
   }
   popChart.data.labels   = histA.map((_, i) => i + 1);
   popChart.data.datasets[0].data = [...histA];
@@ -1042,7 +1125,7 @@ function _refreshUI() {
     document.getElementById('header-legend').textContent =
       ClassA.emoji + ' ' + ClassA.label + '  ' + ClassB.emoji + ' ' + ClassB.label;
   }
-  document.getElementById('hud-phase').textContent = PHASE_HUD[phase];
+  document.getElementById('hud-phase').textContent = getPhaseHudText(phase);
   document.getElementById('hud-round').textContent = 'Round ' + round;
 }
 
@@ -1138,6 +1221,10 @@ document.getElementById('sl-speed').addEventListener('input', e => {
     document.getElementById('val-' + k).textContent = e.target.value;
   });
 });
+document.getElementById('sl-mutation').addEventListener('input', e => {
+  bosMutationRate = +e.target.value / 100;
+  document.getElementById('val-mutation').textContent = `${(+e.target.value).toFixed(1)}%`;
+});
 
 // Sim type tabs
 document.querySelectorAll('.sim-tab').forEach(tab => {
@@ -1174,7 +1261,7 @@ document.querySelectorAll('.sim-tab').forEach(tab => {
 });
 
 // ── Initial boot ──────────────────────────────────────────────
-initAgents(8, 8);
+initAgents(50, 50);
 scene.background.set(PHASE_SKY.fight);
 </script>
 </body>
