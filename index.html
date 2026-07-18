@@ -452,10 +452,11 @@ class BattlePayoff {
   constructor(B = 15, R = 20, C = 3) { this.B = B; this.R = R; this.C = C; }
   /** Return [femaleGain, maleGain] for one encounter. */
   encounter(female, male) {
-    if (female.isCoy && male.isFaithful)    { const v = this.B - this.R/2 - this.C; return [v, v]; }
-    if (female.isCoy && male.isPhilanderer) { return [0, 0]; }
-    if (female.isFast && male.isFaithful)   { const v = this.B - this.R/2; return [v, v]; }
-    /* Fast × Philanderer */                  return [this.B - this.R, this.B];
+    if (female.isCoy  && male.isFaithful)    { const v = this.B - this.R/2 - this.C; return [v, v]; }
+    if (female.isCoy  && male.isPhilanderer) { return [0, 0]; }
+    if (female.isFast && male.isFaithful)    { const v = this.B - this.R/2; return [v, v]; }
+    if (female.isFast && male.isPhilanderer) { return [this.B - this.R, this.B]; }
+    throw new Error(`Unknown pairing: ${female.constructor.name} × ${male.constructor.name}`);
   }
 }
 
@@ -776,11 +777,11 @@ function runBosFightPhase() {
 
   // Position females on left, males on right for visual distinction
   females.forEach((f, i) => {
-    const angle = (i / Math.max(females.length, 1)) * Math.PI - Math.PI / 2;
+    const angle = (i / females.length) * Math.PI - Math.PI / 2;
     f.moveTo(-3.5 + (Math.random() - 0.5) * 1.2, Math.sin(angle) * 3.5 + (Math.random() - 0.5) * 0.6);
   });
   males.forEach((m, i) => {
-    const angle = (i / Math.max(males.length, 1)) * Math.PI - Math.PI / 2;
+    const angle = (i / males.length) * Math.PI - Math.PI / 2;
     m.moveTo(3.5 + (Math.random() - 0.5) * 1.2, Math.sin(angle) * 3.5 + (Math.random() - 0.5) * 0.6);
   });
 
